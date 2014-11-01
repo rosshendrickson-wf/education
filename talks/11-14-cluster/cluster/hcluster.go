@@ -9,18 +9,19 @@ import (
 // values grouped to some id
 
 type Point struct {
-	key    string
-	values []float64
+	Key    string
+	Values []float64
 }
 
 type Cluster struct {
+	Key    string
 	Points []*Point
 }
 
 type Distance struct {
-	p1       *Point
-	p2       *Point
-	distance float64
+	P1       *Point
+	P2       *Point
+	Distance float64
 }
 
 // for every point in the set of data compute a distance to every other set
@@ -29,61 +30,95 @@ type Distance struct {
 func HCluster(points []*Point) []*Cluster {
 
 	cache := make(map[string]*Distance, len(points))
+	//eIndex := make(map[string]*list.Element, len(points))
 	keyIndex := make(map[string]*Point, len(points))
 	for _, point := range points {
-		keyIndex[point.key] = point
+		keyIndex[point.Key] = point
 	}
-	results := make([]*Cluster, 1)
+
+	results := make([]*Cluster, 0)
 	// As things are merged we need to remove them from the points slice
-	remaining := len(points)
-	for remaining > 1 {
+	for len(keyIndex) > 1 {
 		var closest *Distance
-		for _, point := range points {
-			for _, p := range points {
-				cached := cache[mergedKey(point.key, p.key)]
+		for _, point := range keyIndex {
+			for _, p := range keyIndex {
+				cached := cache[mergedKey(point.Key, p.Key)]
 				if cached != nil {
-					if closest != nil && cached.distance > closest.distance {
+					if closest != nil && cached.Distance > closest.Distance {
+						println("A")
 						closest = cached
 					}
 					continue
 				}
-				distance := NewDistance(point, p)
-				cache[mergedKey(point.key, p.key)] = distance
-				if closest == nil {
-					closest = distance
+
+				if point == p {
+					continue
 				}
-				if closest != nil && distance.distance > closest.distance {
+				//log.Println("CL", closest)
+
+				distance := NewDistance(point, p)
+				//log.Printf("new Distance %+v", distance)
+				//cache[mergedKey(point.key, p.key)] = distance
+				if closest == nil {
+					log.Println("B")
+					closest = distance
+					continue
+				}
+				if closest != nil && distance.Distance > closest.Distance {
+					log.Println("C")
 					closest = distance
 				}
 			}
 		}
 		if closest == nil {
+			log.Println("NIL closest")
+			//return nil
+			continue
 		}
-		points = append(points, AveragedPoints(closest))
-		remaining--
-		results = append(results, NewCluster(closest.p1, closest.p2))
+		// Remove merged points
+		delete(keyIndex, closest.P1.Key)
+		delete(keyIndex, closest.P2.Key)
+		// Add new merged node
+		newPoint := AveragedPoints(closest)
+		keyIndex[newPoint.Key] = newPoint
+
+		log.Printf("New Cluster (%s)(%s)", closest.P1.Key, closest.P2.Key)
+		results = append(results, NewCluster(closest.P1, closest.P2))
 	}
 	return results
 }
 
 func NewCluster(points ...*Point) *Cluster {
-	return &Cluster{Points: points}
+	key := ""
+	c := &Cluster{}
+	c.Points = make([]*Point, len(points))
+	for i, point := range points {
+		key += point.Key
+		key += ":"
+		c.Points[i] = point
+	}
+	c.Key = key
+
+	return c
 }
 
 func AveragedPoints(closest *Distance) *Point {
-
-	values := make([]float64, len(closest.p1.values))
-	result := &Point{key: closest.p1.key + closest.p2.key, values: values}
-	for i, value := range closest.p1.values {
-		v2 := closest.p2.values[i]
+	if closest == nil {
+		return nil
+	}
+	values := make([]float64, len(closest.P1.Values))
+	result := &Point{Key: mergedKey(closest.P1.Key, closest.P2.Key), Values: values}
+	for i, value := range closest.P1.Values {
+		v2 := closest.P2.Values[i]
 		values[i] = (value + v2) / 2
 	}
 
 	return result
 }
 
-func NewDistance(p1, p2 *Point) *Distance {
-	return &Distance{p1: p1, p2: p2, distance: Pearson(p1.values, p2.values)}
+func NewDistance(P1, P2 *Point) *Distance {
+	log.Printf("calc distance for (%s)(%s)", P1.Key, P2.Key)
+	return &Distance{P1: P1, P2: P2, Distance: Pearson(P1.Values, P2.Values)}
 }
 
 func mergedKey(k1, k2 string) string {
@@ -121,5 +156,16 @@ func Pearson(v1 []float64, v2 []float64) float64 {
 		log.Println(den)
 		return 0
 	}
+	log.Println("distance was ", 1.0-num/den)
 	return 1.0 - num/den
+}
+
+func ClusterKeys(clusters ...*Cluster) string {
+
+	all := "\n"
+	for _, cluster := range clusters {
+		all += cluster.Key
+		all += "\n"
+	}
+	return all
 }
