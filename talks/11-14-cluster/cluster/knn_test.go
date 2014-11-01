@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestKNN(t *testing.T) {
+func testKNN(t *testing.T) {
 
 	result := NewTestTrial("iris_headers.csv", 0.7)
 	assert.True(t, result)
 }
 
-func TestKNNFunc(t *testing.T) {
+func testKNNFunc(t *testing.T) {
 	filename := "iris_headers.csv"
 	data := CSVtoKNNData(filename)
 	assert.NotNil(t, data)

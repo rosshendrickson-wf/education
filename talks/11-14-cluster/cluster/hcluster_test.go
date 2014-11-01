@@ -43,6 +43,13 @@ func TestHCluster(t *testing.T) {
 	log.Println("Clusters Found \n", clusterKeys)
 }
 
+func TestZebo(t *testing.T) {
+	points := CSVtoPointsLeft("zebo.txt")
+	clusters := HCluster(points)
+	clusterKeys := ClusterKeys(clusters...)
+	log.Println("Zebo Clusters Found \n", clusterKeys)
+}
+
 func BenchmarkHCluster(b *testing.B) {
 	data := genPoints(100, 20)
 	b.ResetTimer()
