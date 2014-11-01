@@ -28,10 +28,10 @@ func main() {
 		fvalues := []float64{cluster.GetValue(sl), cluster.GetValue(sw),
 			cluster.GetValue(pl), cluster.GetValue(pw)}
 		point := cluster.NewPoint("", r.URL.String(), fvalues)
-		fmt.Fprintf(w, "Hi there, I love %+v!", sl)
-		fmt.Fprintf(w, "Hi there, I love %+v!", sw)
-		fmt.Fprintf(w, "Hi there, I love %+v!", pl)
-		fmt.Fprintf(w, "Hi there, I love %+v!", pw)
+		fmt.Fprintf(w, "%+v!\n", sl)
+		fmt.Fprintf(w, "%+v!\n", sw)
+		fmt.Fprintf(w, "%+v!\n", pl)
+		fmt.Fprintf(w, "%+v!\n", pw)
 		fmt.Fprintf(w, "Predicted Class %s", cls.Predict(point, 5))
 	}
 
