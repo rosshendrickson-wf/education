@@ -50,3 +50,11 @@ func CSVtoPoints(filename string) []*Point {
 
 	return result
 }
+
+func GetValue(v string) float64 {
+	f, e := strconv.ParseFloat(v, 64)
+	if e == nil {
+		return f
+	}
+	return float64(0)
+}

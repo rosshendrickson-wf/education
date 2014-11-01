@@ -6,15 +6,16 @@ import (
 	"math"
 	"net/http"
 	"runtime"
+
+	"github.com/rosshendrickson-wf/education/talks/11-14-cluster/cluster"
 )
 
 func main() {
 
-	//data := cluster.CSVtoKNNData("load.csv")
-
+	data := cluster.CSVtoPoints("load.csv")
 	var classify = func(w http.ResponseWriter, r *http.Request) {
-		//cls := cluster.NewKNNClasifierData(data)
-
+		cls := cluster.NewKNNClassifier()
+		cls.Train(data...)
 		// read of URL params
 		//Sepal length, Sepal width,Petal length, Petal width, Species
 
@@ -24,29 +25,14 @@ func main() {
 		pl := values.Get("pl")
 		pw := values.Get("pw")
 
-		// Make them into grid
-		// Create some Attributes
-		//Add a row
-		//		values := []string{"5.1", "3.5", "1.4", "0.2", "Iris-setosa"}
-		//		// Create a csv file
-		//		hackName := "./hack.csv"
-		//		f, _ := os.Create(hackName)
-		//		csvw := csv.NewWriter(f)
-		//		csvw.Write(values)
-		//		csvw.Flush()
-		//		f.Close()
-		//		newInst := cluster.CSVtoKNNData(hackName)
-		//		// Predict against them
-		//		fmt.Println(newInst)
-		//		predictions := cls.Predict(newInst)
-		//		fmt.Println(predictions)
-		//
-		// Process prediction into something we can write
+		fvalues := []float64{cluster.GetValue(sl), cluster.GetValue(sw),
+			cluster.GetValue(pl), cluster.GetValue(pw)}
+		point := cluster.NewPoint("", r.URL.String(), fvalues)
 		fmt.Fprintf(w, "Hi there, I love %+v!", sl)
 		fmt.Fprintf(w, "Hi there, I love %+v!", sw)
 		fmt.Fprintf(w, "Hi there, I love %+v!", pl)
 		fmt.Fprintf(w, "Hi there, I love %+v!", pw)
-
+		fmt.Fprintf(w, "Predicted Class %s", cls.Predict(point, 5))
 	}
 
 	http.HandleFunc("/predict/", classify)

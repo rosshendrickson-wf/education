@@ -86,6 +86,10 @@ func HCluster(points []*Point) []*Cluster {
 	return results
 }
 
+func NewPoint(class string, key string, values []float64) *Point {
+	return &Point{Class: class, Key: key, Values: values}
+}
+
 func NewCluster(points ...*Point) *Cluster {
 	key := ""
 	c := &Cluster{}
