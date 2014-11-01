@@ -29,36 +29,45 @@ type Distance struct {
 func HCluster(points []*Point) []*Cluster {
 
 	cache := make(map[string]*Distance, len(points))
+	keyIndex := make(map[string]*Point, len(points))
+	for _, point := range points {
+		keyIndex[point.key] = point
+	}
 	results := make([]*Cluster, 1)
 	// As things are merged we need to remove them from the points slice
-	for len(points) > 1 {
+	remaining := len(points)
+	for remaining > 1 {
 		var closest *Distance
 		for _, point := range points {
 			for _, p := range points {
 				cached := cache[mergedKey(point.key, p.key)]
 				if cached != nil {
-					if cached.distance > closest.distance {
+					if closest != nil && cached.distance > closest.distance {
 						closest = cached
 					}
 					continue
 				}
-
 				distance := NewDistance(point, p)
-				cache[point.key+p.key] = distance
-				if distance.distance > closest.distance {
+				cache[mergedKey(point.key, p.key)] = distance
+				if closest == nil {
+					closest = distance
+				}
+				if closest != nil && distance.distance > closest.distance {
 					closest = distance
 				}
 			}
 		}
 		if closest == nil {
-			panic("WHAT")
 		}
-
 		points = append(points, AveragedPoints(closest))
-		//results = append(results, &Cluster{points: make([]*points)
+		remaining--
+		results = append(results, NewCluster(closest.p1, closest.p2))
 	}
-
 	return results
+}
+
+func NewCluster(points ...*Point) *Cluster {
+	return &Cluster{Points: points}
 }
 
 func AveragedPoints(closest *Distance) *Point {
@@ -78,7 +87,7 @@ func NewDistance(p1, p2 *Point) *Distance {
 }
 
 func mergedKey(k1, k2 string) string {
-	return k1 + k2
+	return k1 + ":" + k2
 }
 
 func Pearson(v1 []float64, v2 []float64) float64 {
