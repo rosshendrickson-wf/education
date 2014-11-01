@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"strconv"
@@ -41,6 +40,7 @@ func TestHCluster(t *testing.T) {
 
 	clusterKeys := ClusterKeys(clusters...)
 	assert.Equal(t, 9, len(clusters), string(clusterKeys))
+	log.Println("Clusters Found \n", clusterKeys)
 }
 
 func BenchmarkHCluster(b *testing.B) {
@@ -52,5 +52,5 @@ func BenchmarkHCluster(b *testing.B) {
 }
 
 func init() {
-	log.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
 }

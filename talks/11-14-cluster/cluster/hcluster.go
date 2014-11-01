@@ -1,9 +1,6 @@
 package cluster
 
-import (
-	"log"
-	"math"
-)
+import "math"
 
 // Heirachal clustering
 // values grouped to some id
@@ -60,18 +57,18 @@ func HCluster(points []*Point) []*Cluster {
 				//log.Printf("new Distance %+v", distance)
 				//cache[mergedKey(point.key, p.key)] = distance
 				if closest == nil {
-					log.Println("B")
+					//log.Println("B")
 					closest = distance
 					continue
 				}
 				if closest != nil && distance.Distance > closest.Distance {
-					log.Println("C")
+					//log.Println("C")
 					closest = distance
 				}
 			}
 		}
 		if closest == nil {
-			log.Println("NIL closest")
+			//log.Println("NIL closest")
 			//return nil
 			continue
 		}
@@ -82,7 +79,7 @@ func HCluster(points []*Point) []*Cluster {
 		newPoint := AveragedPoints(closest)
 		keyIndex[newPoint.Key] = newPoint
 
-		log.Printf("New Cluster (%s)(%s)", closest.P1.Key, closest.P2.Key)
+		//log.Printf("New Cluster (%s)(%s)", closest.P1.Key, closest.P2.Key)
 		results = append(results, NewCluster(closest.P1, closest.P2))
 	}
 	return results
@@ -117,7 +114,7 @@ func AveragedPoints(closest *Distance) *Point {
 }
 
 func NewDistance(P1, P2 *Point) *Distance {
-	log.Printf("calc distance for (%s)(%s)", P1.Key, P2.Key)
+	//log.Printf("calc distance for (%s)(%s)", P1.Key, P2.Key)
 	return &Distance{P1: P1, P2: P2, Distance: Pearson(P1.Values, P2.Values)}
 }
 
@@ -153,10 +150,10 @@ func Pearson(v1 []float64, v2 []float64) float64 {
 	den := math.Sqrt((sum1Sq - math.Pow(sum1, 2)/viLen) * (sum2Sq - math.Pow(sum2, 2)/viLen))
 
 	if den == 0 {
-		log.Println(den)
+		//log.Println(den)
 		return 0
 	}
-	log.Println("distance was ", 1.0-num/den)
+	//log.Println("distance was ", 1.0-num/den)
 	return 1.0 - num/den
 }
 
