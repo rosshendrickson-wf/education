@@ -6,6 +6,7 @@ import "math"
 // values grouped to some id
 
 type Point struct {
+	Class  string
 	Key    string
 	Values []float64
 }
