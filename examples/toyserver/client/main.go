@@ -191,7 +191,7 @@ func main() {
 
 		vectors := randVectors(100)
 
-		ms := message.VectorsToMessages(vectors, 100)
+		ms := message.VectorsToMessages(vectors, 101)
 		//conn.WriteToUDP(b, newAddr)
 		for i, m := range ms {
 			m.Value = strconv.Itoa(i)

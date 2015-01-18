@@ -13,6 +13,7 @@ import (
 // compressions, go to a byte specific protocol
 // 30 will keep the message under 512, our byte limit (based on router issues)
 const MaxVectors = 32
+const PacketSize = 512
 
 type Packet []byte
 
@@ -43,10 +44,10 @@ func VectorsToMessages(vectors []*Vector, name int) []*Message {
 	numMessages := len(vectors) / MaxVectors
 	results := make([]*Message, numMessages)
 
+	j := 0
 	for i := range results {
 		m := &Message{Vectors: make([]*Vector, 0)}
-		j := 0
-		for len(m.Vectors) < MaxVectors || j < len(vectors) {
+		for len(m.Vectors) < MaxVectors && j < len(vectors)-1 {
 			m.Vectors = append(m.Vectors, vectors[j])
 			j++
 		}
@@ -62,8 +63,13 @@ func MessageToPacket(m *Message) Packet {
 	enc := json.NewEncoder(buf)
 	enc.Encode(m)
 	println("len m", buf.Len())
+
+	if buf.Len() > PacketSize {
+		println("len m v's ", len(m.Vectors))
+	}
+
 	buf.WriteByte(delim)
-	packet := make([]byte, 512)
+	packet := make([]byte, PacketSize)
 	println("len p", len(packet))
 	n, err := buf.Read(packet)
 	log.Println("n err", n, err)
