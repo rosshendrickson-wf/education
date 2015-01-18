@@ -1,7 +1,6 @@
 package main
 
 import (
-	//"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,17 +8,14 @@ import (
 	"net"
 	"os"
 	"time"
-)
 
-type vector struct {
-	xdir int
-	ydir int
-}
+	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
+)
 
 // read from the connection ever 5ms and apply the updates
 func runShip(address, port string) {
 
-	commands := make(chan *vector, 1000)
+	commands := make(chan *message.Vector, 1000)
 	ship := &Ship{commands: commands}
 
 	ship.Connect(address, port)
@@ -58,18 +54,13 @@ OuterLoop:
 
 }
 
-type Message struct {
-	Name    int
-	Vectors []*vector
-}
-
 type Ship struct {
 	xp         int
 	yp         int
 	health     int
 	name       [8]byte
 	conn       net.UDPConn
-	commands   chan *vector
+	commands   chan *message.Vector
 	updates    chan []byte
 	shipTime   int
 	serverTime int
@@ -95,8 +86,8 @@ func (s *Ship) Display() {
 	fmt.Printf("%s:%d,%d", s.name, s.xp, s.yp)
 }
 
-func (s *Ship) gatherCommands() []*vector {
-	var commands []*vector
+func (s *Ship) gatherCommands() []*message.Vector {
+	var commands []*message.Vector
 OuterLoop:
 	for {
 		select {
@@ -119,28 +110,28 @@ func (s *Ship) SendCommands() {
 	for _, command := range s.gatherCommands() {
 		fmt.Printf("command %+v", command)
 		// optimistic move will switch to the right place after computation
-		s.update(command.xdir, command.ydir)
+		s.update(command.X, command.Y)
 	}
 
-	m := &Message{Vectors: commands}
+	m := &message.Message{Vectors: commands}
 	s.sendMessage(m)
 }
 
-func (s *Ship) sendMessage(m *Message) {
+func (s *Ship) sendMessage(m *message.Message) {
 	// actuall send the vector over the wire as a command
 	b, _ := json.Marshal(m)
 	s.conn.Write(b)
 }
 
 // reads streaming in information
-func (s *Ship) gatherUpdates() []*vector {
+func (s *Ship) gatherUpdates() []*message.Vector {
 
-	var updates []*vector
+	var updates []*message.Vector
 OuterLoop:
 	for {
 		select {
 		case b := <-s.updates:
-			var m Message
+			var m message.Message
 			json.Unmarshal(b, m)
 			if b != nil {
 				updates = append(updates, m.Vectors...)
@@ -157,8 +148,8 @@ func (s *Ship) ApplyUpdates() {
 
 	// Updates override the position as they are state updates
 	for _, update := range s.gatherUpdates() {
-		s.xp = update.xdir
-		s.yp = update.ydir
+		s.xp = update.X
+		s.yp = update.Y
 	}
 	fmt.Printf("%s:%d,%d", s.name, s.xp, s.yp)
 	s.frames++
@@ -169,12 +160,12 @@ func random(min, max int) int {
 	return rand.Intn(max-min) + min
 }
 
-func RandomMove() *vector {
+func RandomMove() *message.Vector {
 
 	xdir := random(1, 6)
 	ydir := random(1, 10)
 
-	return &vector{xdir, ydir}
+	return &message.Vector{xdir, ydir}
 }
 
 func main() {
@@ -192,24 +183,34 @@ func main() {
 	defer conn.Close()
 	log.Println("Connected to ", addr)
 	for {
-		time.Sleep(time.Second * 1)
-		m := &Message{Name: 1}
-		b, _ := json.Marshal(m)
 		newAddr := new(net.UDPAddr)
 		*newAddr = *addr
 		newAddr.IP = make(net.IP, len(addr.IP))
 		copy(newAddr.IP, addr.IP)
 
+		vectors := randVectors(32)
+		m := &message.Message{Name: 100, Vectors: vectors, Value: "hello"}
 		//conn.WriteToUDP(b, newAddr)
-		conn.Write(b)
+		p := message.MessageToPacket(m)
+		conn.Write(p)
 
-		var buf []byte = make([]byte, 1500)
-		//var buf []byte
+		var buf []byte = make([]byte, 512)
 		n, a, err := conn.ReadFromUDP(buf[0:])
 		log.Printf("read %s %d", a, n)
 		if err != nil {
 			return
 		}
-
+		time.Sleep(time.Second * 10)
 	}
+}
+
+func randVectors(num int) []*message.Vector {
+
+	results := make([]*message.Vector, num)
+	for i := range results {
+
+		results[i] = RandomMove()
+	}
+
+	return results
 }
