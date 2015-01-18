@@ -8,6 +8,47 @@ import (
 )
 
 func main() {
+	addr, err := net.ResolveUDPAddr("udp4", ":10234")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer conn.Close()
+
+	log.Printf("Read loop Start %+v", addr)
+	for {
+
+		handleClient(conn)
+		//	n, remote_addr, err := conn.ReadFromUDP(buf)
+		//	log.Println("read", remote_addr)
+		//	switch {
+		//	case n != 0:
+		//		fmt.Printf("from %v got message %q\n", remote_addr, string(buf[:n]))
+		//	case err != nil:
+		//		log.Fatal(err)
+		//	}
+	}
+}
+
+func handleClient(conn *net.UDPConn) {
+
+	var buf []byte = make([]byte, 1500)
+	//var buf []byte
+	n, a, err := conn.ReadFromUDP(buf[0:])
+	log.Printf("read %s %d", a, n)
+	if err != nil {
+		return
+	}
+
+	conn.WriteToUDP([]byte("hello"), a)
+}
+
+func omain() {
 	addr := net.UDPAddr{
 		Port: 6000,
 		IP:   net.ParseIP("127.0.0.1"),

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+	//"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -59,6 +59,7 @@ OuterLoop:
 }
 
 type Message struct {
+	Name    int
 	Vectors []*vector
 }
 
@@ -66,7 +67,7 @@ type Ship struct {
 	xp         int
 	yp         int
 	health     int
-	name       string
+	name       [8]byte
 	conn       net.UDPConn
 	commands   chan *vector
 	updates    chan []byte
@@ -121,14 +122,13 @@ func (s *Ship) SendCommands() {
 		s.update(command.xdir, command.ydir)
 	}
 
-	m := &Message{commands}
+	m := &Message{Vectors: commands}
 	s.sendMessage(m)
 }
 
 func (s *Ship) sendMessage(m *Message) {
 	// actuall send the vector over the wire as a command
 	b, _ := json.Marshal(m)
-	b = append(b, []byte("\n")...)
 	s.conn.Write(b)
 }
 
@@ -178,27 +178,37 @@ func RandomMove() *vector {
 }
 
 func main() {
+	addr, err := net.ResolveUDPAddr("udp", ":10234")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	conn, err := net.Dial("udp", "127.0.0.1:6000")
+	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	connbuf := bufio.NewReader(conn)
+
+	defer conn.Close()
+	log.Println("Connected to ", addr)
 	for {
-		str, err := connbuf.ReadString('\n')
-		if len(str) > 0 {
-			fmt.Println("pong", str)
-		}
+		time.Sleep(time.Second * 1)
+		m := &Message{Name: 1}
+		b, _ := json.Marshal(m)
+		newAddr := new(net.UDPAddr)
+		*newAddr = *addr
+		newAddr.IP = make(net.IP, len(addr.IP))
+		copy(newAddr.IP, addr.IP)
+
+		//conn.WriteToUDP(b, newAddr)
+		conn.Write(b)
+
+		var buf []byte = make([]byte, 1500)
+		//var buf []byte
+		n, a, err := conn.ReadFromUDP(buf[0:])
+		log.Printf("read %s %d", a, n)
 		if err != nil {
-			break
-		}
-
-		_, e := conn.Write([]byte("hello\n"))
-
-		if e != nil {
-			log.Printf("e%+v", e)
-
+			return
 		}
 
 	}
