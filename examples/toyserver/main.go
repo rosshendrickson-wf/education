@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"log"
 	"net"
+	"runtime"
 	"time"
 
 	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
@@ -17,6 +18,8 @@ var vcount int = 0
 var vold int = 0
 
 func main() {
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	addr, err := net.ResolveUDPAddr("udp4", ":10234")
 	if err != nil {
 		log.Fatal(err)

@@ -183,16 +183,17 @@ func main() {
 
 	defer conn.Close()
 	log.Println("Connected to ", addr)
+	num := 100000
+	vectors := randVectors(num)
+
+	ms := message.VectorsToMessages(vectors, 101)
+
 	for {
 		newAddr := new(net.UDPAddr)
 		*newAddr = *addr
 		newAddr.IP = make(net.IP, len(addr.IP))
 		copy(newAddr.IP, addr.IP)
 
-		num := 10000
-		vectors := randVectors(num)
-
-		ms := message.VectorsToMessages(vectors, 101)
 		//conn.WriteToUDP(b, newAddr)
 		for i, m := range ms {
 			m.Value = strconv.Itoa(i)
@@ -206,9 +207,9 @@ func main() {
 		//	if err != nil {
 		//		return
 		//	}
-		log.Printf("Sent %d vectors in %d", num, len(ms))
+		//log.Printf("Sent %d vectors in %d", num, len(ms))
 		//time.Sleep(time.Second * 1)
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 1)
 	}
 }
 
