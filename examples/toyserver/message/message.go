@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"encoding/json"
-	"log"
+	//	"log"
 )
 
 // Very VERY naive protocol - totally can do a ton here to get more data
@@ -62,7 +62,7 @@ func MessageToPacket(m *Message) Packet {
 	buf := new(bytes.Buffer)
 	enc := json.NewEncoder(buf)
 	enc.Encode(m)
-	println("len m", buf.Len())
+	//println("len m", buf.Len())
 
 	if buf.Len() > PacketSize {
 		println("len m v's ", len(m.Vectors))
@@ -70,14 +70,14 @@ func MessageToPacket(m *Message) Packet {
 
 	buf.WriteByte(delim)
 	packet := make([]byte, PacketSize)
-	println("len p", len(packet))
-	n, err := buf.Read(packet)
-	log.Println("n err", n, err)
+	buf.Read(packet)
+
+	//n, err := buf.Read(packet)
+	//log.Println("n err", n, err)
 	return packet
 }
 
 func PacketToMessage(p []byte) *Message {
-	println("len p", len(p))
 	var in bytes.Buffer
 	in.Write(p)
 
@@ -85,7 +85,6 @@ func PacketToMessage(p []byte) *Message {
 	if e != nil {
 		println(e)
 	}
-	println("len b", len(b))
 	var m Message
 	json.Unmarshal(b[:len(b)-1], &m)
 

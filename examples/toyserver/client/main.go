@@ -189,7 +189,8 @@ func main() {
 		newAddr.IP = make(net.IP, len(addr.IP))
 		copy(newAddr.IP, addr.IP)
 
-		vectors := randVectors(100)
+		num := 10000
+		vectors := randVectors(num)
 
 		ms := message.VectorsToMessages(vectors, 101)
 		//conn.WriteToUDP(b, newAddr)
@@ -199,13 +200,15 @@ func main() {
 			go conn.Write(p)
 		}
 
-		var buf []byte = make([]byte, 512)
-		n, a, err := conn.ReadFromUDP(buf[0:])
-		log.Printf("read %s %d", a, n)
-		if err != nil {
-			return
-		}
-		time.Sleep(time.Second * 10)
+		//	var buf []byte = make([]byte, 512)
+		//	n, a, err := conn.ReadFromUDP(buf[0:])
+		//	log.Printf("read %s %d", a, n)
+		//	if err != nil {
+		//		return
+		//	}
+		log.Printf("Sent %d vectors in %d", num, len(ms))
+		//time.Sleep(time.Second * 1)
+		time.Sleep(time.Millisecond * 10)
 	}
 }
 
