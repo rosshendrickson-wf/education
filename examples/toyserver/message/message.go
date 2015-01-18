@@ -2,11 +2,17 @@ package message
 
 import (
 	"bytes"
+	"math/rand"
+	"time"
+
 	"encoding/json"
 	"log"
 )
 
-const MaxVector = 30
+// Very VERY naive protocol - totally can do a ton here to get more data
+// compressions, go to a byte specific protocol
+// 30 will keep the message under 512, our byte limit (based on router issues)
+const MaxVectors = 32
 
 type Packet []byte
 
@@ -22,6 +28,33 @@ type Message struct {
 }
 
 var delim = byte(0)
+
+// VectorsToMessages will take a list of vectors and split them up into
+// as many messages as are needed
+func VectorsToMessages(vectors []*Vector, name int) []*Message {
+
+	if len(vectors) <= MaxVectors {
+
+		results := make([]*Message, 0)
+		results = append(results, &Message{Name: name, Vectors: vectors})
+		return results
+	}
+
+	numMessages := len(vectors) / MaxVectors
+	results := make([]*Message, numMessages)
+
+	for i := range results {
+		m := &Message{Vectors: make([]*Vector, 0)}
+		j := 0
+		for len(m.Vectors) < MaxVectors || j < len(vectors) {
+			m.Vectors = append(m.Vectors, vectors[j])
+			j++
+		}
+		results[i] = m
+	}
+
+	return results
+}
 
 func MessageToPacket(m *Message) Packet {
 
@@ -51,4 +84,24 @@ func PacketToMessage(p []byte) *Message {
 	json.Unmarshal(b[:len(b)-1], &m)
 
 	return &m
+}
+
+func randVectors(num int) []*Vector {
+
+	results := make([]*Vector, num)
+	for i := range results {
+		xdir := random(1, 6)
+		ydir := random(1, 10)
+
+		v := &Vector{xdir, ydir}
+
+		results[i] = v
+	}
+
+	return results
+}
+
+func random(min, max int) int {
+	rand.Seed(time.Now().Unix())
+	return rand.Intn(max-min) + min
 }

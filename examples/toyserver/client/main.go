@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
@@ -188,11 +189,15 @@ func main() {
 		newAddr.IP = make(net.IP, len(addr.IP))
 		copy(newAddr.IP, addr.IP)
 
-		vectors := randVectors(32)
-		m := &message.Message{Name: 100, Vectors: vectors, Value: "hello"}
+		vectors := randVectors(100)
+
+		ms := message.VectorsToMessages(vectors, 100)
 		//conn.WriteToUDP(b, newAddr)
-		p := message.MessageToPacket(m)
-		conn.Write(p)
+		for i, m := range ms {
+			m.Value = strconv.Itoa(i)
+			p := message.MessageToPacket(m)
+			go conn.Write(p)
+		}
 
 		var buf []byte = make([]byte, 512)
 		n, a, err := conn.ReadFromUDP(buf[0:])

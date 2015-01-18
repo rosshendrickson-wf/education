@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"log"
 	"net"
 
@@ -39,7 +38,6 @@ func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 	}
 
 	m := message.PacketToMessage(buf)
-	//	log.Printf("bytes: %+v", buf)
 	log.Printf("deserialized: %+v", m)
 	conn.WriteToUDP([]byte("hello"), a)
 }
