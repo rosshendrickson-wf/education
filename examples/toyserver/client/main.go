@@ -84,36 +84,29 @@ func (s *Ship) Connect(address, serverPort, clientPort string) {
 		log.Fatal(err)
 	}
 
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	saddr, err := net.ResolveUDPAddr("udp4", address+":"+serverPort)
 	if err != nil {
 		log.Fatal(err)
 	}
 	s.serverAddr = saddr
 
-	sconn, err := net.DialUDP("udp", nil, saddr)
+	conn, err := net.DialUDP("udp", addr, saddr)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	s.sconn = sconn
+	s.conn = conn
 
 	go func() {
 		for {
 			defer conn.Close()
 			connbuf := bufio.NewReader(conn)
-			s.handleUpdate(sconn, connbuf)
+			s.handleUpdate(conn, connbuf)
 			if s.Stop() {
 				return
 			}
 		}
 	}()
-
-	s.conn = conn
 }
 
 func (s *Ship) Close() {
