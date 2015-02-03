@@ -106,7 +106,7 @@ func (s *Ship) Connect(address, serverPort, clientPort string) {
 		for {
 			defer conn.Close()
 			connbuf := bufio.NewReader(conn)
-			s.handleUpdate(conn, connbuf)
+			s.handleUpdate(sconn, connbuf)
 			if s.Stop() {
 				return
 			}
