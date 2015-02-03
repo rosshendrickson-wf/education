@@ -1,7 +1,6 @@
 package message
 
 import (
-	"log"
 	"strconv"
 	"testing"
 
@@ -46,18 +45,14 @@ func TestVectorsRoundTrip(t *testing.T) {
 	v := randVectors(MaxVectors * correct)
 	ms := VectorsToMessages(v, 1)
 	assert.Equal(t, correct, len(ms))
-	println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAA", len(ms))
 	var packets []Packet
 	for i, m := range ms {
 		m.Revision = i
 		packets = append(packets, MessageToPacket(m))
 	}
 	for i, p := range packets {
-		//println("packet", p)
 		expected := ms[i]
 		m := PacketToMessage(p)
-		log.Printf("%+v", m)
-		//log.Printf("%+v", expected)
 		vectors := PayloadToVectors(m.Payload)
 		length := strconv.Itoa(len(vectors))
 		assert.True(t, len(vectors) <= MaxVectors, length)
