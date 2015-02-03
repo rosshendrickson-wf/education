@@ -59,14 +59,19 @@ func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 
 	//n, a, err := conn.ReadFromUDP(buf[0:])
 	//log.Printf("read %s %d", a, n)
-	//	if err != nil {
-	//		return
-	//	}
+	//if err != nil {
+	//	return
+	//}
 
 	m := message.PacketToMessage(buf)
-	if m.Value != "" {
+	if m != nil && m.Revision > 0 {
+		//	println("Got something")
+
+	}
+	if m.Type == message.VectorUpdate {
 		count++
-		vcount += len(m.Vectors)
+		vectors := message.PayloadToVectors(m.Payload)
+		vcount += len(vectors)
 	}
 	//log.Printf("deserialized: %s", m.Value)
 	//	conn.WriteToUDP([]byte("hello"), a)

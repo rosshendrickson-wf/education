@@ -2,6 +2,7 @@ package message
 
 import (
 	"bytes"
+	"io"
 	"math/rand"
 	"time"
 
@@ -12,8 +13,9 @@ import (
 // Very VERY naive protocol - totally can do a ton here to get more data
 // compressions, go to a byte specific protocol
 // 30 will keep the message under 512, our byte limit (based on router issues)
-const MaxVectors = 32
+const MaxVectors = 22
 const PacketSize = 512
+const VectorUpdate = "Vector"
 
 type Packet []byte
 
@@ -23,21 +25,27 @@ type Vector struct {
 }
 
 type Message struct {
-	Name    int
+	Name     int
+	Revision int
+	Type     string
+	Payload  []byte
+}
+
+type VectorPayload struct {
 	Vectors []*Vector
-	Value   string
 }
 
 var delim = byte(0)
 
 // VectorsToMessages will take a list of vectors and split them up into
-// as many messages as are needed
+// as many messages as are needed. Room for speeding this up
 func VectorsToMessages(vectors []*Vector, name int) []*Message {
 
 	if len(vectors) <= MaxVectors {
-
 		results := make([]*Message, 0)
-		results = append(results, &Message{Name: name, Vectors: vectors})
+		vec := VectorPayload{vectors}
+		payload, _ := json.Marshal(vec)
+		results = append(results, &Message{Name: name, Payload: payload})
 		return results
 	}
 
@@ -46,15 +54,28 @@ func VectorsToMessages(vectors []*Vector, name int) []*Message {
 
 	j := 0
 	for i := range results {
-		m := &Message{Vectors: make([]*Vector, 0)}
-		for len(m.Vectors) < MaxVectors && j < len(vectors)-1 {
-			m.Vectors = append(m.Vectors, vectors[j])
+		m := &Message{}
+		chunk := make([]*Vector, 0)
+		for len(chunk) < MaxVectors && j < len(vectors)-1 {
+			chunk = append(chunk, vectors[j])
 			j++
 		}
+		vec := VectorPayload{chunk}
+		payload, _ := json.Marshal(vec)
+		m.Payload = payload
+		m.Type = VectorUpdate
 		results[i] = m
 	}
 
 	return results
+}
+
+func PayloadToVectors(payload []byte) []*Vector {
+
+	var vPayload VectorPayload
+	json.Unmarshal(payload, &vPayload)
+
+	return vPayload.Vectors
 }
 
 func MessageToPacket(m *Message) Packet {
@@ -62,19 +83,17 @@ func MessageToPacket(m *Message) Packet {
 	buf := new(bytes.Buffer)
 	enc := json.NewEncoder(buf)
 	enc.Encode(m)
-	//println("len m", buf.Len())
+	//println("len m1", buf.Len())
 
-	if buf.Len() > PacketSize {
-		println("len m v's ", len(m.Vectors))
-	}
-
+	//	packet := make([]byte, PacketSize)
+	//	buf.Read(packet)
+	//	n, err := buf.Read(packet)
 	buf.WriteByte(delim)
-	packet := make([]byte, PacketSize)
-	buf.Read(packet)
 
-	//n, err := buf.Read(packet)
-	//log.Println("n err", n, err)
-	return packet
+	//println("len m2", buf.Len())
+
+	//	println("n err", n, err)
+	return buf.Bytes()
 }
 
 func PacketToMessage(p []byte) *Message {
@@ -82,8 +101,11 @@ func PacketToMessage(p []byte) *Message {
 	in.Write(p)
 
 	b, e := in.ReadBytes(delim)
-	if e != nil {
-		println(e)
+	if e != nil && e != io.EOF {
+		if e == io.EOF {
+			println("ERR", e.Error())
+		}
+		println("ERR", e.Error())
 	}
 	var m Message
 	json.Unmarshal(b[:len(b)-1], &m)

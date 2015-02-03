@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
@@ -107,15 +106,15 @@ OuterLoop:
 
 func (s *Ship) SendCommands() {
 
-	commands := s.gatherCommands()
+	//commands := s.gatherCommands()
 	for _, command := range s.gatherCommands() {
 		fmt.Printf("command %+v", command)
 		// optimistic move will switch to the right place after computation
 		s.update(command.X, command.Y)
 	}
 
-	m := &message.Message{Vectors: commands}
-	s.sendMessage(m)
+	//	m := &message.Message{Vectors: commands}
+	//	s.sendMessage(m)
 }
 
 func (s *Ship) sendMessage(m *message.Message) {
@@ -135,7 +134,7 @@ OuterLoop:
 			var m message.Message
 			json.Unmarshal(b, m)
 			if b != nil {
-				updates = append(updates, m.Vectors...)
+				//				updates = append(updates, m.Vectors...)
 			}
 		case <-time.After(time.Millisecond * 1):
 			break OuterLoop
@@ -196,7 +195,7 @@ func main() {
 
 		//conn.WriteToUDP(b, newAddr)
 		for i, m := range ms {
-			m.Value = strconv.Itoa(i)
+			m.Revision = i
 			p := message.MessageToPacket(m)
 			go conn.Write(p)
 		}
@@ -209,7 +208,8 @@ func main() {
 		//	}
 		//log.Printf("Sent %d vectors in %d", num, len(ms))
 		//time.Sleep(time.Second * 1)
-		time.Sleep(time.Millisecond * 1)
+		println("Sent Messages")
+		time.Sleep(time.Millisecond * 1000)
 	}
 }
 
