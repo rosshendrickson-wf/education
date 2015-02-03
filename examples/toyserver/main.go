@@ -55,13 +55,13 @@ func main() {
 func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 
 	var buf []byte = make([]byte, 512)
-	conn.ReadFromUDP(buf[0:])
+	//	conn.ReadFromUDP(buf[0:])
 
-	//n, a, err := conn.ReadFromUDP(buf[0:])
-	//log.Printf("read %s %d", a, n)
-	//if err != nil {
-	//	return
-	//}
+	_, a, err := conn.ReadFromUDP(buf[0:])
+	//	log.Printf("read %s %d", a, n)
+	if err != nil {
+		return
+	}
 
 	m := message.PacketToMessage(buf)
 	if m != nil && m.Revision > 0 {
@@ -70,6 +70,11 @@ func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 	}
 	if m.Type == message.VectorUpdate {
 		count++
+		if count%2 == 0 {
+			log.Printf("PONG %+v", a)
+			pong := message.MessageToPacket(m)
+			conn.WriteTo(pong, a)
+		}
 		vectors := message.PayloadToVectors(m.Payload)
 		vcount += len(vectors)
 	}
