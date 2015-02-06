@@ -47,6 +47,7 @@ func main() {
 	log.Printf("Read loop Start %+v", addr)
 	connbuf := bufio.NewReader(conn)
 	for {
+
 		handleClient(conn, connbuf)
 	}
 
@@ -65,12 +66,11 @@ func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 
 	m := message.PacketToMessage(buf)
 	if m != nil && m.Revision > 0 {
-		//	println("Got something")
-
+		//println("Got something")
 	}
 	if m.Type == message.VectorUpdate {
 		count++
-		if count%2 == 0 {
+		if count%100 == 0 {
 			log.Printf("PONG %+v", a)
 			pong := message.MessageToPacket(m)
 			conn.WriteTo(pong, a)

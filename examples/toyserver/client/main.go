@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -29,11 +28,13 @@ func runShip(address, serverPort, clientPort string) {
 
 	ship.Connect(address, serverPort, clientPort)
 
+	//time.Sleep(time.Millisecond * 1000)
+
 	//ApplyUpdates := time.NewTicker(time.Millisecond * 5).C
-	SendCommands := time.NewTicker(time.Millisecond * 500).C
+	SendCommands := time.NewTicker(time.Millisecond * 10).C
 	//Display := time.NewTicker(time.Millisecond * 120).C
 	DisplayFrames := time.NewTicker(time.Second * 1).C
-	Random := time.NewTicker(time.Millisecond * 5).C
+	Random := time.NewTicker(time.Millisecond * 1).C
 	DieTime := time.NewTicker(time.Second * 10).C
 
 OuterLoop:
@@ -78,35 +79,50 @@ type Ship struct {
 
 func (s *Ship) Connect(address, serverPort, clientPort string) {
 
-	// spin off a goroutine to read from the connection
-	addr, err := net.ResolveUDPAddr("udp4", ":"+clientPort)
+	addr, err := net.ResolveUDPAddr("udp", ":"+clientPort)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	saddr, err := net.ResolveUDPAddr("udp4", address+":"+serverPort)
+	saddr, err := net.ResolveUDPAddr("udp", address+":"+serverPort)
 	if err != nil {
 		log.Fatal(err)
 	}
-	s.serverAddr = saddr
 
 	conn, err := net.DialUDP("udp", addr, saddr)
+	log.Printf("Listening on %+v", addr)
+	log.Printf("Sending on %+v", saddr)
+	//conn, err := net.ListenUDP("udp", addr)
+	//	conn, err := net.DialUDP("udp", addr, saddr)
+
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	s.conn = conn
 
+	//	sconn, err := net.DialUDP("udp", nil, saddr)
+	//	if err != nil {
+	//		fmt.Println(err)
+	//		os.Exit(1)
+	//	}
+
 	go func() {
+		//		defer conn.Close()
 		for {
-			defer conn.Close()
-			connbuf := bufio.NewReader(conn)
-			s.handleUpdate(conn, connbuf)
+			//			println("HEY")
+			var buf []byte = make([]byte, 512)
+			conn.ReadFromUDP(buf[0:])
+			message.PacketToMessage(buf)
+			s.frames++
 			if s.Stop() {
+				println("NO")
 				return
 			}
+			//			println("Looped")
 		}
 	}()
+
 }
 
 func (s *Ship) Close() {
@@ -122,12 +138,7 @@ func (s *Ship) Stop() bool {
 	return result
 }
 
-func (s *Ship) handleUpdate(conn *net.UDPConn, reader *bufio.Reader) {
-	var buf []byte = make([]byte, 512)
-	conn.ReadFromUDP(buf[0:])
-	m := message.PacketToMessage(buf)
-	log.Printf("ship got message %+v", m)
-	s.frames++
+func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	//	s.updates <- buf
 }
 
@@ -174,17 +185,24 @@ OuterLoop:
 }
 
 func (s *Ship) SendCommands() {
+
+	num := 1000
+	vectors := randVectors(num)
 	s.revision++
-	log.Printf("Sending Commands at Rev %d", s.revision)
-	ms := message.VectorsToMessages(s.gatherCommands(), s.revision)
+
+	ms := message.VectorsToMessages(vectors, s.revision)
 	s.sendMessages(ms...)
+	if s.revision%10 == 0 {
+		log.Printf("Sent %d Commands at Rev %d", len(ms), s.revision)
+	}
+
 }
 
 func (s *Ship) sendMessages(ms ...*message.Message) {
 	// actuall send the vector over the wire as a command
 	for _, m := range ms {
 		b := message.MessageToPacket(m)
-		s.sconn.Write(b)
+		s.conn.Write(b)
 	}
 }
 
@@ -242,17 +260,38 @@ func RandomMove() *message.Vector {
 
 func main() {
 
-	runShip("", "10234", "55102")
+	address := ""
+	clientPort := "36503"
+	serverPort := "10234"
+	//	clientPort := "55102"
+	runShip(address, serverPort, clientPort)
+	//test(address, serverPort, clientPort)
 }
 
-func test() {
+func test(address, serverPort, clientPort string) {
+
 	//////////////////////////////////// Sends Random traffic
-	addr, err := net.ResolveUDPAddr("udp", ":10234")
+	//	addr, err := net.ResolveUDPAddr("udp", ":10234")
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//
+	//	maddr, err := net.ResolveUDPAddr("udp", ":"+clientPort)
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//
+	addr, err := net.ResolveUDPAddr("udp", ":"+clientPort)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	conn, err := net.DialUDP("udp", nil, addr)
+	saddr, err := net.ResolveUDPAddr("udp", address+":"+serverPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conn, err := net.DialUDP("udp", addr, saddr)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -260,32 +299,31 @@ func test() {
 
 	defer conn.Close()
 	log.Println("Connected to ", addr)
-	num := 100000
+	num := 1000
 	vectors := randVectors(num)
 
 	ms := message.VectorsToMessages(vectors, 101)
 
+	go func() {
+		for {
+			var buf []byte = make([]byte, 512)
+			n, a, err := conn.ReadFromUDP(buf[0:])
+			log.Printf("read %s %d", a, n)
+			if err != nil {
+				//		return
+			}
+		}
+	}()
+
 	for {
-		//		newAddr := new(net.UDPAddr)
-		//		*newAddr = *addr
-		//		newAddr.IP = make(net.IP, len(addr.IP))
-		//		copy(newAddr.IP, addr.IP)
-		//
-		//conn.WriteToUDP(b, newAddr)
+
 		for i, m := range ms {
 			m.Revision = i
 			p := message.MessageToPacket(m)
 			conn.Write(p)
 		}
 
-		//	var buf []byte = make([]byte, 512)
-		//	n, a, err := conn.ReadFromUDP(buf[0:])
-		//	log.Printf("read %s %d", a, n)
-		//	if err != nil {
-		//		return
-		//	}
-		//log.Printf("Sent %d vectors in %d", num, len(ms))
-		//time.Sleep(time.Second * 1)
+		log.Printf("Sent %d vectors in %d messages", num, len(ms))
 		println("Sent Messages")
 		time.Sleep(time.Millisecond * 1000)
 	}
