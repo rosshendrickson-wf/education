@@ -23,6 +23,22 @@ func TestVectorsToMessages(t *testing.T) {
 	}
 }
 
+func TestVectorsToMessagesMin(t *testing.T) {
+
+	correct := 1
+	v := randVectors(correct)
+	ms := VectorsToMessages(v, 1)
+	assert.Equal(t, correct, len(ms))
+	for _, m := range ms {
+		vectors := PayloadToVectors(m.Payload)
+		length := strconv.Itoa(len(vectors))
+		assert.True(t, len(vectors) == len(v), length)
+		for _, v := range vectors {
+			assert.NotNil(t, v)
+		}
+	}
+}
+
 func TestVectorPayload(t *testing.T) {
 
 	v := randVectors(MaxVectors)

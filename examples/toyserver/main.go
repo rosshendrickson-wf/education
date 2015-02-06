@@ -66,7 +66,7 @@ func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 
 	m := message.PacketToMessage(buf)
 	if m != nil && m.Revision > 0 {
-		//println("Got something")
+		println("Got something")
 	}
 	if m.Type == message.VectorUpdate {
 		count++

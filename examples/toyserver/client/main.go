@@ -28,10 +28,8 @@ func runShip(address, serverPort, clientPort string) {
 
 	ship.Connect(address, serverPort, clientPort)
 
-	//time.Sleep(time.Millisecond * 1000)
-
 	//ApplyUpdates := time.NewTicker(time.Millisecond * 5).C
-	SendCommands := time.NewTicker(time.Millisecond * 10).C
+	SendCommands := time.NewTicker(time.Millisecond * 100).C
 	//Display := time.NewTicker(time.Millisecond * 120).C
 	DisplayFrames := time.NewTicker(time.Second * 1).C
 	Random := time.NewTicker(time.Millisecond * 1).C
@@ -92,8 +90,6 @@ func (s *Ship) Connect(address, serverPort, clientPort string) {
 	conn, err := net.DialUDP("udp", addr, saddr)
 	log.Printf("Listening on %+v", addr)
 	log.Printf("Sending on %+v", saddr)
-	//conn, err := net.ListenUDP("udp", addr)
-	//	conn, err := net.DialUDP("udp", addr, saddr)
 
 	if err != nil {
 		fmt.Println(err)
@@ -101,25 +97,13 @@ func (s *Ship) Connect(address, serverPort, clientPort string) {
 	}
 	s.conn = conn
 
-	//	sconn, err := net.DialUDP("udp", nil, saddr)
-	//	if err != nil {
-	//		fmt.Println(err)
-	//		os.Exit(1)
-	//	}
-
 	go func() {
-		//		defer conn.Close()
+		defer conn.Close()
 		for {
-			//			println("HEY")
-			var buf []byte = make([]byte, 512)
-			conn.ReadFromUDP(buf[0:])
-			message.PacketToMessage(buf)
-			s.frames++
+			s.handleUpdate(conn)
 			if s.Stop() {
-				println("NO")
 				return
 			}
-			//			println("Looped")
 		}
 	}()
 
@@ -139,6 +123,12 @@ func (s *Ship) Stop() bool {
 }
 
 func (s *Ship) handleUpdate(conn *net.UDPConn) {
+
+	var buf []byte = make([]byte, 512)
+	conn.ReadFromUDP(buf[0:])
+	message.PacketToMessage(buf)
+	s.frames++
+
 	//	s.updates <- buf
 }
 
@@ -148,8 +138,8 @@ func (s *Ship) update(xdir, ydir int) {
 }
 
 func (s *Ship) DisplayFrames() {
-	log.Printf("------------%s:%d", s.name, s.frames)
-	s.frames = 0
+	log.Printf("------------:%d", s.frames)
+	//s.frames = 0
 }
 
 func (s *Ship) Display() {
@@ -186,7 +176,7 @@ OuterLoop:
 
 func (s *Ship) SendCommands() {
 
-	num := 1000
+	num := 1
 	vectors := randVectors(num)
 	s.revision++
 
@@ -252,7 +242,7 @@ func random(min, max int) int {
 
 func RandomMove() *message.Vector {
 
-	xdir := random(1, 6)
+	xdir := random(1, 10)
 	ydir := random(1, 10)
 
 	return &message.Vector{xdir, ydir}
@@ -333,7 +323,6 @@ func randVectors(num int) []*message.Vector {
 
 	results := make([]*message.Vector, num)
 	for i := range results {
-
 		results[i] = RandomMove()
 	}
 

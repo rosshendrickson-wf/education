@@ -3,11 +3,11 @@ package message
 import (
 	"bytes"
 	"io"
+	"log"
 	"math/rand"
 	"time"
 
 	"encoding/json"
-	//	"log"
 )
 
 // Very VERY naive protocol - totally can do a ton here to get more data
@@ -42,10 +42,14 @@ var delim = byte(0)
 func VectorsToMessages(vectors []*Vector, name int) []*Message {
 
 	if len(vectors) <= MaxVectors {
-		results := make([]*Message, 0)
+
+		log.Printf("Vec: %+v", vectors)
+		log.Printf("Vec: %+v", vectors[0])
+
+		results := make([]*Message, 1)
 		vec := VectorPayload{vectors}
 		payload, _ := json.Marshal(vec)
-		results = append(results, &Message{Name: name, Payload: payload})
+		results[0] = &Message{Name: name, Payload: payload}
 		return results
 	}
 
