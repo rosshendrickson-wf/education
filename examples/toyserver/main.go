@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"log"
 	"net"
 	"runtime"
@@ -55,7 +54,6 @@ func handleClient(conn *net.UDPConn) {
 
 	var buf []byte = make([]byte, 512)
 	//	conn.ReadFromUDP(buf[0:])
-
 	_, a, err := conn.ReadFromUDP(buf[0:])
 	//	log.Printf("read %s %d", a, n)
 	if err != nil {

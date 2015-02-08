@@ -263,7 +263,7 @@ OuterLoop:
 		case b := <-s.updates:
 			var m message.Message
 			json.Unmarshal(b, m)
-			if m.Type != "" {
+			if m.Type > 0 {
 				println("Ship got message")
 				//				updates = append(updates, m.Vectors...)
 			}
