@@ -45,15 +45,13 @@ func main() {
 	defer conn.Close()
 
 	log.Printf("Read loop Start %+v", addr)
-	connbuf := bufio.NewReader(conn)
 	for {
-
-		handleClient(conn, connbuf)
+		handleClient(conn)
 	}
 
 }
 
-func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
+func handleClient(conn *net.UDPConn) {
 
 	var buf []byte = make([]byte, 512)
 	//	conn.ReadFromUDP(buf[0:])
@@ -68,7 +66,14 @@ func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 	if m != nil && m.Revision > 0 {
 		println("Got something")
 	}
-	if m.Type == message.VectorUpdate {
+
+	switch m.Type {
+	case message.Connect:
+		pong := message.MessageToPacket(m)
+		conn.WriteTo(pong, a)
+		log.Printf("CONNECTED %+v: %+v", a, m)
+
+	case message.VectorUpdate:
 		count++
 		if count%100 == 0 {
 			log.Printf("PONG %+v", a)
@@ -77,7 +82,7 @@ func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
 		}
 		vectors := message.PayloadToVectors(m.Payload)
 		vcount += len(vectors)
+	default:
+		log.Printf("DEFAULT %+v", m)
 	}
-	//log.Printf("deserialized: %s", m.Value)
-	//	conn.WriteToUDP([]byte("hello"), a)
 }

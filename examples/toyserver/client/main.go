@@ -24,9 +24,16 @@ import (
 func runShip(address, serverPort, clientPort string) {
 
 	commands := make(chan *message.Vector, 1000)
-	ship := &Ship{commands: commands}
+	ship := &Ship{name: 100, commands: commands}
 
-	ship.Connect(address, serverPort, clientPort)
+	connected := ship.Connect(address, serverPort, clientPort)
+
+	if connected {
+		log.Println("Ship is connected to server")
+	} else {
+		log.Println("Unable to start ship")
+		return
+	}
 
 	//ApplyUpdates := time.NewTicker(time.Millisecond * 5).C
 	SendCommands := time.NewTicker(time.Millisecond * 100).C
@@ -61,7 +68,7 @@ type Ship struct {
 	xp         int
 	yp         int
 	health     int
-	name       [8]byte
+	name       int
 	conn       *net.UDPConn
 	sconn      *net.UDPConn
 	commands   chan *message.Vector
@@ -73,9 +80,16 @@ type Ship struct {
 	stop       bool
 	revision   int
 	serverAddr net.Addr
+	connected  bool
 }
 
-func (s *Ship) Connect(address, serverPort, clientPort string) {
+func (s *Ship) Connected(value bool) {
+	s.lock.Lock()
+	s.connected = value
+	s.lock.Unlock()
+}
+
+func (s *Ship) Connect(address, serverPort, clientPort string) bool {
 
 	addr, err := net.ResolveUDPAddr("udp", ":"+clientPort)
 	if err != nil {
@@ -97,6 +111,33 @@ func (s *Ship) Connect(address, serverPort, clientPort string) {
 	}
 	s.conn = conn
 
+	count := 0
+Connect:
+	for {
+
+		// Send connection message
+		m := message.ConnectMessage(s.name, 0)
+		pong := message.MessageToPacket(m)
+		conn.Write(pong)
+
+		log.Println("Connecting . . . . ", count)
+		s.lock.Lock()
+		if s.connected {
+			s.lock.Unlock()
+			break Connect
+		}
+		s.lock.Unlock()
+		count++
+
+		s.handleUpdate(conn)
+
+		if count >= 10 {
+			return false
+		}
+
+		time.Sleep(time.Second * 1)
+	}
+
 	go func() {
 		defer conn.Close()
 		for {
@@ -106,7 +147,7 @@ func (s *Ship) Connect(address, serverPort, clientPort string) {
 			}
 		}
 	}()
-
+	return true
 }
 
 func (s *Ship) Close() {
@@ -126,10 +167,21 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 
 	var buf []byte = make([]byte, 512)
 	conn.ReadFromUDP(buf[0:])
-	message.PacketToMessage(buf)
+	m := message.PacketToMessage(buf)
 	s.frames++
 
-	//	s.updates <- buf
+	if m == nil {
+		println("a")
+		return
+	}
+	switch m.Type {
+	case message.Connect:
+		s.Connected(true)
+	case message.VectorUpdate:
+		println("got a correction")
+	default:
+		log.Printf("DEFAULT %+v", m)
+	}
 }
 
 func (s *Ship) update(xdir, ydir int) {
@@ -176,7 +228,7 @@ OuterLoop:
 
 func (s *Ship) SendCommands() {
 
-	num := 1
+	num := 100
 	vectors := randVectors(num)
 	s.revision++
 

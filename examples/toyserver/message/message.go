@@ -3,7 +3,7 @@ package message
 import (
 	"bytes"
 	"io"
-	"log"
+	//	"log"
 	"math/rand"
 	"time"
 
@@ -12,10 +12,15 @@ import (
 
 // Very VERY naive protocol - totally can do a ton here to get more data
 // compressions, go to a byte specific protocol
-// 30 will keep the message under 512, our byte limit (based on router issues)
+// 22 will keep the message under 512, our byte limit (based on router issues)
 const MaxVectors = 22
 const PacketSize = 512
-const VectorUpdate = "Vector"
+
+// Message types
+const (
+	VectorUpdate = "V"
+	Connect      = "C"
+)
 
 type Packet []byte
 
@@ -37,14 +42,18 @@ type VectorPayload struct {
 
 var delim = byte(0)
 
+func ConnectMessage(name, revision int) *Message {
+	return &Message{Name: name, Revision: revision, Type: Connect}
+}
+
 // VectorsToMessages will take a list of vectors and split them up into
 // as many messages as are needed. Room for speeding this up
 func VectorsToMessages(vectors []*Vector, name int) []*Message {
 
 	if len(vectors) <= MaxVectors {
 
-		log.Printf("Vec: %+v", vectors)
-		log.Printf("Vec: %+v", vectors[0])
+		//	log.Printf("Vec: %+v", vectors)
+		//	log.Printf("Vec: %+v", vectors[0])
 
 		results := make([]*Message, 1)
 		vec := VectorPayload{vectors}
