@@ -77,7 +77,7 @@ func main() {
 
 func incrementRevision(conn net.Conn) {
 	for {
-		time.Sleep(time.Second * 1 / 300)
+		time.Sleep(time.Second * 1 / 1000)
 		ready := true
 		for _, v := range connections {
 			if !v.GetReady() {
@@ -89,7 +89,7 @@ func incrementRevision(conn net.Conn) {
 			continue
 		}
 		revision++
-		if revision > 10000 {
+		if revision > 1000000 {
 			os.Exit(1)
 		}
 		count++
