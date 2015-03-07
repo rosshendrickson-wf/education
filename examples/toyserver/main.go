@@ -71,6 +71,8 @@ func handleClient(conn *net.UDPConn) {
 		conn.WriteTo(pong, a)
 		log.Printf("CONNECTED %+v: %+v", a, m)
 
+	case message.InputUpdate:
+		log.Printf("Got input")
 	case message.VectorUpdate:
 		count++
 		if count%100 == 0 {

@@ -16,7 +16,7 @@ const PacketSize = 512
 const (
 	VectorUpdate = 1
 	Connect      = 2
-	Input        = 3
+	InputUpdate  = 3
 )
 
 type Packet []byte
