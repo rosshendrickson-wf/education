@@ -30,7 +30,7 @@ func (c *Connection) SetRevisionReady(revision int, ready bool) {
 	c.revision = revision
 	c.ready = ready
 	c.mu.Unlock()
-	println("Udate connection rev & ready", revision, ready)
+	//println("Udate connection rev & ready", revision, ready)
 }
 
 func (c *Connection) GetReady() bool {
@@ -42,6 +42,14 @@ func (c *Connection) GetReady() bool {
 }
 
 func main() {
+
+	ticker := time.NewTicker(time.Second * 2)
+	go func() {
+		for _ = range ticker.C {
+			log.Printf("Processed ~%d Frames", count/2)
+			count = 0
+		}
+	}()
 
 	// Listen for incoming connections.
 	l, err := net.Listen("tcp", "localhost:8001")
@@ -69,7 +77,7 @@ func main() {
 
 func incrementRevision(conn net.Conn) {
 	for {
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Second * 1 / 300)
 		ready := true
 		for _, v := range connections {
 			if !v.GetReady() {
@@ -77,10 +85,14 @@ func incrementRevision(conn net.Conn) {
 				break
 			}
 		}
-		if !ready {
+		if !ready || len(connections) == 0 {
 			continue
 		}
 		revision++
+		if revision > 10000 {
+			os.Exit(1)
+		}
+		count++
 		for _, v := range connections {
 			update := &message.Message{
 				Name: v.name, Revision: revision, Type: message.FrameUpdate}
@@ -127,7 +139,7 @@ func handleRequest(conn net.Conn) {
 			log.Printf("%d connectd", m.Name)
 			println("Currently Connected", len(connections))
 		case message.FrameUpdateAck:
-			println("Server got Ack Frame", m.Name, m.Revision)
+			//println("Server got Ack Frame", m.Name, m.Revision)
 			pong := message.MessageToPacket(m)
 			conn.Write(pong)
 			connection.SetRevisionReady(m.Revision, true)

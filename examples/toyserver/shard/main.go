@@ -108,12 +108,12 @@ func handleTCP(conn net.Conn, s *Shard) {
 			Name: s.name, Revision: s.proposed, Type: message.FrameUpdateAck}
 		packet := message.MessageToPacket(ack)
 		conn.Write(packet)
-		log.Printf("Proposed update %d to revision %d", s.revision, s.proposed)
+		//log.Printf("Proposed update %d to revision %d", s.revision, s.proposed)
 	case message.FrameUpdateAck:
 		if s.proposed == m.Revision {
 			s.confirmedNew = true
 			s.revision = s.proposed
-			log.Println("Confirmed update to revision", s.revision)
+			//	log.Println("Confirmed update to revision", s.revision)
 		} else {
 			log.Println("Ack something else ", s.revision)
 		}
