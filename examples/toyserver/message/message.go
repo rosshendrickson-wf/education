@@ -14,9 +14,11 @@ const PacketSize = 512
 
 // Message types
 const (
-	VectorUpdate = 1
-	Connect      = 2
-	InputUpdate  = 3
+	VectorUpdate   = 1
+	Connect        = 2
+	InputUpdate    = 3
+	FrameUpdate    = 4
+	FrameUpdateAck = 5
 )
 
 type Packet []byte
