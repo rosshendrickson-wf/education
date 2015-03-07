@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
 
@@ -12,14 +13,16 @@ import (
 var defaultPort = "8001"
 var defaultAddr = "localhost"
 
-var connected bool
-var revision int
-var proposed int
-var name = 101
+type Shard struct {
+	revision int
+	proposed int
+	name     int
 
-// states
-var newRevision bool
-var confirmedNew bool
+	// states
+	newRevision  bool
+	confirmedNew bool
+	connected    bool
+}
 
 func main() {
 	var (
@@ -42,13 +45,25 @@ func main() {
 	}
 
 	// Connection
-	m := message.ConnectMessage(name, 1)
+	s := &Shard{name: 101}
+	m := message.ConnectMessage(s.name, 1)
 	packet := message.MessageToPacket(m)
 	tcpconn.Write(packet)
 	// Start Listening for connection
-	for !connected {
-		handleTCP(tcpconn)
+	for !s.connected {
+		handleTCP(tcpconn, s)
 	}
+
+	defer tcpconn.Close()
+	//go shardState(s)
+	for {
+		handleTCP(tcpconn, s)
+	}
+
+}
+
+func shardState(s *Shard) {
+
 	//      Loop
 	//		Check if we are supposed to calc new frame (Read TCP)
 	//      Check if new frame has shared entities
@@ -57,21 +72,20 @@ func main() {
 	//              Bump Revision
 
 	for {
-		for !confirmedNew {
-			for !newRevision {
-				handleTCP(tcpconn)
-			}
-			handleTCP(tcpconn)
-		}
-		println("Revision incremented to ", revision)
-		// Reset Loop
-		confirmedNew = false
-		newRevision = false
-	}
+		for !s.confirmedNew {
+			for !s.newRevision {
 
+			}
+		}
+
+		// Reset Loop
+		s.confirmedNew = false
+		s.newRevision = false
+	}
 }
 
-func handleTCP(conn net.Conn) {
+func handleTCP(conn net.Conn, s *Shard) {
+
 	var buf []byte = make([]byte, 512)
 	_, err := conn.Read(buf)
 	if err != nil {
@@ -80,25 +94,31 @@ func handleTCP(conn net.Conn) {
 	}
 
 	m := message.PacketToMessage(buf)
-	if m != nil && m.Revision > 0 {
-		println("Got something", m)
-	}
-
+	//	if m != nil && m.Revision >= 0 {
+	//		log.Println("Got something", m.Type, m.Revision)
+	//	}
+	//
 	switch m.Type {
 	case message.Connect:
-		connected = true
+		s.connected = true
 	case message.FrameUpdate:
-		newRevision = true
-		proposed = m.Revision
+		s.newRevision = true
+		s.proposed = m.Revision
 		ack := &message.Message{
-			Name: name, Revision: revision, Type: message.FrameUpdateAck}
+			Name: s.name, Revision: s.proposed, Type: message.FrameUpdateAck}
 		packet := message.MessageToPacket(ack)
 		conn.Write(packet)
-		println("Proposed update to revision", proposed)
+		log.Printf("Proposed update %d to revision %d", s.revision, s.proposed)
 	case message.FrameUpdateAck:
-		confirmedNew = true
-		revision = proposed
-	default:
-	}
+		if s.proposed == m.Revision {
+			s.confirmedNew = true
+			s.revision = s.proposed
+			log.Println("Confirmed update to revision", s.revision)
+		} else {
+			log.Println("Ack something else ", s.revision)
+		}
 
+	default:
+		println("default")
+	}
 }

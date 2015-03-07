@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
 )
@@ -12,12 +14,31 @@ import (
 var count = 0
 var vcount = 0
 
-var connections = make([]*Connection, 1)
+var revision = 0
+var connections = make(map[net.Addr]*Connection, 0)
 
 type Connection struct {
 	name     int
 	revision int
 	ready    bool
+	mu       sync.RWMutex
+}
+
+func (c *Connection) SetRevisionReady(revision int, ready bool) {
+
+	c.mu.Lock()
+	c.revision = revision
+	c.ready = ready
+	c.mu.Unlock()
+	println("Udate connection rev & ready", revision, ready)
+}
+
+func (c *Connection) GetReady() bool {
+
+	c.mu.RLock()
+	r := c.ready
+	c.mu.RUnlock()
+	return r
 }
 
 func main() {
@@ -41,59 +62,75 @@ func main() {
 			fmt.Println("Error accepting: ", err.Error())
 			os.Exit(1)
 		}
+		go incrementRevision(conn)
 		go handleRequest(conn)
 	}
 }
 
-func handleRequest(conn net.Conn) {
-
-	revision := 0
+func incrementRevision(conn net.Conn) {
 	for {
+		time.Sleep(time.Second * 1)
+		ready := true
+		for _, v := range connections {
+			if !v.GetReady() {
+				ready = false
+				break
+			}
+		}
+		if !ready {
+			continue
+		}
+		revision++
+		for _, v := range connections {
+			update := &message.Message{
+				Name: v.name, Revision: revision, Type: message.FrameUpdate}
+			pong := message.MessageToPacket(update)
+			conn.Write(pong)
+		}
+	}
+}
+
+func handleRequest(conn net.Conn) {
+	println("New Connection")
+
+	//	update := &message.Message{
+	//		Name: 0, Revision: revision + 1, Type: message.FrameUpdate}
+	//	pong := message.MessageToPacket(update)
+	//	conn.Write(pong)
+	//
+	println("Move to revision", revision)
+	var connection *Connection
+	for {
+
 		var buf []byte = make([]byte, 512)
 		_, err := conn.Read(buf)
 		if err != nil {
-			fmt.Println("Error reading:", err.Error())
+			fmt.Println("Connection Error", err.Error())
+			delete(connections, conn.LocalAddr())
+			println("Shard Disconnected")
+			println("Currently Connected", len(connections))
 			return
 		}
 
 		m := message.PacketToMessage(buf)
-		if m != nil && m.Revision > 0 {
-			println("Got something")
-		}
+		//		if m != nil && m.Revision > 0 {
+		//			println("Got something")
+		//		}
 
 		switch m.Type {
 		case message.Connect:
 			pong := message.MessageToPacket(m)
-			connection := &Connection{m.Name, m.Revision, false}
-			connections = append(connections, connection)
+			connection = &Connection{name: m.Name,
+				revision: revision, ready: true}
+			connections[conn.LocalAddr()] = connection
 			conn.Write(pong)
-			log.Printf("CONNECTED %+v", m.Name)
+			log.Printf("%d connectd", m.Name)
+			println("Currently Connected", len(connections))
 		case message.FrameUpdateAck:
-			println("Server got Ack Frame")
+			println("Server got Ack Frame", m.Name, m.Revision)
 			pong := message.MessageToPacket(m)
 			conn.Write(pong)
-		case message.InputUpdate:
-			log.Printf("Got input")
-		case message.VectorUpdate:
-			count++
-			if count%100 == 0 {
-				log.Printf("PONG")
-				pong := message.MessageToPacket(m)
-				conn.Write(pong)
-			}
-			vectors := message.PayloadToVectors(m.Payload)
-			vcount += len(vectors)
-		default:
-			log.Printf("DEFAULT %+v", m)
+			connection.SetRevisionReady(m.Revision, true)
 		}
-
-		revision++
-		update := &message.Message{
-			Name: m.Name, Revision: revision, Type: message.FrameUpdate}
-
-		pong := message.MessageToPacket(update)
-		println("Move to revision", revision)
-		conn.Write(pong)
-
 	}
 }
