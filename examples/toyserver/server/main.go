@@ -50,7 +50,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	conn, err := net.ListenUDP("udp", addr)
+	udpconn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func main() {
 		for {
 			handleUDPClient(conn)
 		}
-	}(conn)
+	}(udpconn)
 	log.Printf("Read UDP loop Start %+v", addr)
 
 	// TCP
@@ -91,7 +91,7 @@ func main() {
 			os.Exit(1)
 		}
 		go incrementRevision(conn)
-		go handleRequest(conn)
+		go handleRequest(conn, udpconn)
 	}
 }
 
@@ -122,7 +122,7 @@ func incrementRevision(conn net.Conn) {
 	}
 }
 
-func handleRequest(conn net.Conn) {
+func handleRequest(conn net.Conn, udpconn *net.UDPConn) {
 	println("New Connection")
 
 	//	update := &message.Message{
@@ -163,6 +163,9 @@ func handleRequest(conn net.Conn) {
 			pong := message.MessageToPacket(m)
 			conn.Write(pong)
 			connection.SetRevisionReady(m.Revision, true)
+		case message.StateUpdate:
+			println("Broadcast")
+			go Broadcast(udpconn, buf)
 		}
 	}
 }
@@ -204,5 +207,11 @@ func handleUDPClient(conn *net.UDPConn) {
 		vcount += len(vectors)
 	default:
 		log.Printf("DEFAULT %+v", m)
+	}
+}
+
+func Broadcast(conn *net.UDPConn, packet []byte) {
+	for a, _ := range clients {
+		conn.WriteTo(packet, a)
 	}
 }

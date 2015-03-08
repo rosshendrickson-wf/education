@@ -162,6 +162,7 @@ func shardState(s *Shard, conn net.Conn) {
 	ticksToNextBall := 10
 	for {
 		if s.CalcNextFrame() {
+			println("Calculating Frame")
 			ticksToNextBall--
 			if ticksToNextBall == 0 {
 				ticksToNextBall = rand.Intn(100) + 1
@@ -170,8 +171,6 @@ func shardState(s *Shard, conn net.Conn) {
 			states := step(1.0 / 60.0)
 			s.SetConfirmedNew(false)
 			messages := message.StatesToMessages(states)
-
-			// totally room for speed here
 			for _, m := range messages {
 				packet := message.MessageToPacket(m)
 				conn.Write(packet)
