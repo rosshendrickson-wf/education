@@ -16,6 +16,7 @@ var vcount = 0
 
 var revision = 0
 var connections = make(map[net.Addr]*Connection, 0)
+var clients = make(map[net.Addr]*Connection, 0)
 
 type Connection struct {
 	name     int
@@ -96,7 +97,7 @@ func main() {
 
 func incrementRevision(conn net.Conn) {
 	for {
-		time.Sleep(time.Second * 1 / 1000)
+		time.Sleep(time.Second * 1 / 60)
 		ready := true
 		for _, v := range connections {
 			if !v.GetReady() {
@@ -108,7 +109,7 @@ func incrementRevision(conn net.Conn) {
 			continue
 		}
 		revision++
-		if revision > 10000 {
+		if revision > 1000 {
 			os.Exit(1)
 		}
 		count++
@@ -167,7 +168,7 @@ func handleRequest(conn net.Conn) {
 }
 
 func handleUDPClient(conn *net.UDPConn) {
-
+	var connection *Connection
 	var buf []byte = make([]byte, 512)
 	//	conn.ReadFromUDP(buf[0:])
 	_, a, err := conn.ReadFromUDP(buf[0:])
@@ -186,6 +187,9 @@ func handleUDPClient(conn *net.UDPConn) {
 		pong := message.MessageToPacket(m)
 		conn.WriteTo(pong, a)
 		log.Printf("CONNECTED %+v: %+v", a, m)
+		connection = &Connection{name: m.Name,
+			revision: revision, ready: true}
+		clients[a] = connection
 
 	case message.InputUpdate:
 		log.Printf("Got input")

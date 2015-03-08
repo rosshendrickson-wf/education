@@ -19,6 +19,7 @@ const (
 	InputUpdate    = 3
 	FrameUpdate    = 4
 	FrameUpdateAck = 5
+	StateUpdate    = 6
 )
 
 type Packet []byte

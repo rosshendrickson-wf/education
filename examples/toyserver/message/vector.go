@@ -11,6 +11,10 @@ type Vector struct {
 	Y int
 }
 
+type Vec struct {
+	X, Y float32
+}
+
 type VectorPayload struct {
 	Vectors []*Vector
 }
