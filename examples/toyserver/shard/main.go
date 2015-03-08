@@ -118,7 +118,7 @@ func handleTCP(conn net.Conn, s *Shard) {
 			log.Println("Ack something else ", s.revision)
 		}
 
-	default:
-		println("default")
+		//	default:
+		//		println("default")
 	}
 }

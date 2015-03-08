@@ -43,6 +43,25 @@ func (c *Connection) GetReady() bool {
 
 func main() {
 
+	// UDP - clients
+	addr, err := net.ResolveUDPAddr("udp4", ":10234")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func(conn *net.UDPConn) {
+		for {
+			handleUDPClient(conn)
+		}
+	}(conn)
+	log.Printf("Read UDP loop Start %+v", addr)
+
+	// TCP
 	ticker := time.NewTicker(time.Second * 2)
 	go func() {
 		for _ = range ticker.C {
@@ -89,7 +108,7 @@ func incrementRevision(conn net.Conn) {
 			continue
 		}
 		revision++
-		if revision > 1000000 {
+		if revision > 10000 {
 			os.Exit(1)
 		}
 		count++
@@ -144,5 +163,42 @@ func handleRequest(conn net.Conn) {
 			conn.Write(pong)
 			connection.SetRevisionReady(m.Revision, true)
 		}
+	}
+}
+
+func handleUDPClient(conn *net.UDPConn) {
+
+	var buf []byte = make([]byte, 512)
+	//	conn.ReadFromUDP(buf[0:])
+	_, a, err := conn.ReadFromUDP(buf[0:])
+	//	log.Printf("read %s %d", a, n)
+	if err != nil {
+		return
+	}
+
+	m := message.PacketToMessage(buf)
+	if m != nil && m.Revision > 0 {
+		println("Got something")
+	}
+
+	switch m.Type {
+	case message.Connect:
+		pong := message.MessageToPacket(m)
+		conn.WriteTo(pong, a)
+		log.Printf("CONNECTED %+v: %+v", a, m)
+
+	case message.InputUpdate:
+		log.Printf("Got input")
+	case message.VectorUpdate:
+		count++
+		if count%100 == 0 {
+			log.Printf("PONG %+v", a)
+			pong := message.MessageToPacket(m)
+			conn.WriteTo(pong, a)
+		}
+		vectors := message.PayloadToVectors(m.Payload)
+		vcount += len(vectors)
+	default:
+		log.Printf("DEFAULT %+v", m)
 	}
 }
