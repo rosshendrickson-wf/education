@@ -118,7 +118,7 @@ func addBall(x, y, rot float32) {
 	ball.SetElasticity(0.95)
 
 	body := chipmunk.NewBody(vect.Float(ballMass), ball.Moment(float32(ballMass)))
-	body.SetPosition(vect.Vect{vect.Float(x), 600.0})
+	body.SetPosition(vect.Vect{vect.Float(x), vect.Float(y)})
 	body.SetAngle(vect.Float(rot))
 
 	body.AddShape(ball)
