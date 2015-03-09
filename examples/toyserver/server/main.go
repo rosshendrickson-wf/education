@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Workiva/go-datastructures/queue"
+
 	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
 )
 
@@ -17,6 +19,7 @@ var vcount = 0
 var revision = 0
 var connections = make(map[net.Addr]*Connection, 0)
 var clients = make(map[net.Addr]*Connection, 0)
+var bQueue *queue.Queue
 
 type Connection struct {
 	name     int
@@ -44,6 +47,15 @@ func (c *Connection) GetReady() bool {
 
 func main() {
 
+	// Stat Ticker
+	ticker := time.NewTicker(time.Second * 2)
+	go func() {
+		for _ = range ticker.C {
+			log.Printf("Processed ~%d Frames", count/2)
+			count = 0
+		}
+	}()
+
 	// UDP - clients
 	addr, err := net.ResolveUDPAddr("udp4", ":10234")
 	if err != nil {
@@ -63,14 +75,6 @@ func main() {
 	log.Printf("Read UDP loop Start %+v", addr)
 
 	// TCP
-	ticker := time.NewTicker(time.Second * 2)
-	go func() {
-		for _ = range ticker.C {
-			log.Printf("Processed ~%d Frames", count/2)
-			count = 0
-		}
-	}()
-
 	// Listen for incoming connections.
 	l, err := net.Listen("tcp", "localhost:8001")
 	if err != nil {
@@ -81,6 +85,23 @@ func main() {
 	// closes.
 	defer l.Close()
 	fmt.Println("Listening on " + "local 8001")
+
+	// Setup Broadcaster
+	bQueue = queue.New(1000)
+
+	go func(queue *queue.Queue) {
+
+		for {
+			packet, err := queue.Get(1)
+			if err != nil {
+				log.Printf("Error accessing items from queue %s", err)
+				return
+			}
+
+			Broadcast(udpconn, packet[0].([]byte))
+		}
+	}(bQueue)
+
 	for {
 		// Listen for an
 		// incoming
@@ -97,7 +118,7 @@ func main() {
 
 func incrementRevision(conn net.Conn) {
 	for {
-		time.Sleep(time.Second * 1 / 60)
+		time.Sleep(time.Second * 1 / 120)
 		ready := true
 		for _, v := range connections {
 			if !v.GetReady() {
@@ -109,7 +130,7 @@ func incrementRevision(conn net.Conn) {
 			continue
 		}
 		revision++
-		if revision > 1000 {
+		if revision > 100000 {
 			os.Exit(1)
 		}
 		count++
@@ -124,13 +145,6 @@ func incrementRevision(conn net.Conn) {
 
 func handleRequest(conn net.Conn, udpconn *net.UDPConn) {
 	println("New Connection")
-
-	//	update := &message.Message{
-	//		Name: 0, Revision: revision + 1, Type: message.FrameUpdate}
-	//	pong := message.MessageToPacket(update)
-	//	conn.Write(pong)
-	//
-	println("Move to revision", revision)
 	var connection *Connection
 	for {
 
@@ -164,7 +178,8 @@ func handleRequest(conn net.Conn, udpconn *net.UDPConn) {
 			conn.Write(pong)
 			connection.SetRevisionReady(m.Revision, true)
 		case message.StateUpdate:
-			go Broadcast(udpconn, buf)
+			println("got stat update")
+			bQueue.Put(buf)
 		}
 	}
 }
@@ -210,7 +225,11 @@ func handleUDPClient(conn *net.UDPConn) {
 }
 
 func Broadcast(conn *net.UDPConn, packet []byte) {
+	println("BroadCast")
 	for a, _ := range clients {
+		println("STUCK")
 		conn.WriteTo(packet, a)
+		println("HERE")
+
 	}
 }

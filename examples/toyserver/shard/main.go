@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/vova616/chipmunk"
 	"github.com/vova616/chipmunk/vect"
@@ -20,6 +21,8 @@ import (
 var (
 	ballRadius = 25
 	ballMass   = 1
+	count      = 0
+	fcount     = 0
 
 	space       *chipmunk.Space
 	balls       []*chipmunk.Shape
@@ -115,6 +118,20 @@ func (s *Shard) SetConfirmedNew(value bool) {
 }
 
 func main() {
+
+	// Stat Ticker
+	tickerSecond := 1
+	ticker := time.NewTicker(time.Second * 1)
+	go func() {
+		for _ = range ticker.C {
+			log.Printf("Recived ~%d Frames Updates", count/tickerSecond)
+			count = 0
+
+			log.Printf("Calc ~%d Frames", fcount/tickerSecond)
+			fcount = 0
+		}
+	}()
+
 	var (
 		addr = flag.String("address", defaultAddr, "Address to server")
 		tcp  = flag.String("tcpport", defaultPort, "TCP port")
@@ -173,6 +190,7 @@ func shardState(s *Shard, conn net.Conn) {
 			for _, m := range messages {
 				packet := message.MessageToPacket(m)
 				conn.Write(packet)
+				fcount++
 			}
 		}
 	}
@@ -207,6 +225,7 @@ func handleTCP(conn net.Conn, s *Shard) {
 		if s.proposed == m.Revision {
 			s.confirmedNew = true
 			s.revision = s.proposed
+			count++
 			//	log.Println("Confirmed update to revision", s.revision)
 		} else {
 			log.Println("Ack something else ", s.revision)

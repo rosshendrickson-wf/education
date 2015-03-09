@@ -148,7 +148,7 @@ func runShip(address, serverPort, clientPort string) {
 	//Display := time.NewTicker(time.Millisecond * 120).C
 	DisplayFrames := time.NewTicker(time.Second * 1).C
 	Random := time.NewTicker(time.Millisecond * 1).C
-	DieTime := time.NewTicker(time.Second * 10).C
+	DieTime := time.NewTicker(time.Second * 30).C
 
 OuterLoop:
 	for {
@@ -313,10 +313,13 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	case message.VectorUpdate:
 		println("got a correction")
 	case message.StateUpdate:
+		//println("got broadcast")
 		balls = make([]*chipmunk.Shape, 0)
 		states := message.PayloadToStates(m.Payload)
 		for _, state := range states {
-			addBall(state.Position.X, state.Position.Y, state.Rotation)
+			if state != nil {
+				addBall(state.Position.X, state.Position.Y, state.Rotation)
+			}
 		}
 		if window != nil {
 			draw()
