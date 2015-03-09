@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	//	"runtime"
+	"runtime"
 	"sync"
 	"time"
 
@@ -35,6 +35,7 @@ var (
 	balls       []*chipmunk.Shape
 	staticLines []*chipmunk.Shape
 	deg2rad     = math.Pi / 180
+	window      *glfw.Window
 )
 
 // drawCircle draws a circle for the specified radius, rotation angle, and the specified number of sides
@@ -70,7 +71,6 @@ func draw() {
 
 	gl.Color4f(.3, .3, 1, .8)
 	// draw balls
-	println("LEN BALLS", len(balls))
 	for _, ball := range balls {
 		gl.PushMatrix()
 		pos := ball.Body.Position()
@@ -142,30 +142,6 @@ func runShip(address, serverPort, clientPort string) {
 		log.Println("Unable to start ship")
 		return
 	}
-
-	// Set up graphics
-	// initialize glfw
-	if !glfw.Init() {
-		panic("Failed to initialize GLFW")
-	}
-	defer glfw.Terminate()
-
-	// create window
-	window, err := glfw.CreateWindow(600, 600, os.Args[0], nil, nil)
-	if err != nil {
-		panic(err)
-	}
-	window.SetFramebufferSizeCallback(onResize)
-
-	window.MakeContextCurrent()
-	// set up opengl context
-	onResize(window, 600, 600)
-
-	// set up physics
-	createBodies()
-
-	//runtime.LockOSThread()
-	glfw.SwapInterval(1)
 
 	//ApplyUpdates := time.NewTicker(time.Millisecond * 5).C
 	//	SendCommands := time.NewTicker(time.Millisecond * 100).C
@@ -272,6 +248,31 @@ Connect:
 
 	go func() {
 		defer conn.Close()
+
+		// Set up graphics
+		// initialize glfw
+		if !glfw.Init() {
+			panic("Failed to initialize GLFW")
+		}
+		defer glfw.Terminate()
+
+		// create window
+		window, _ = glfw.CreateWindow(600, 600, os.Args[0], nil, nil)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		window.SetFramebufferSizeCallback(onResize)
+
+		window.MakeContextCurrent()
+		// set up opengl context
+		onResize(window, 600, 600)
+
+		// set up physics
+		createBodies()
+
+		runtime.LockOSThread()
+		glfw.SwapInterval(1)
+
 		for {
 			s.handleUpdate(conn)
 			if s.Stop() {
@@ -313,12 +314,15 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 		println("got a correction")
 	case message.StateUpdate:
 		balls = make([]*chipmunk.Shape, 0)
-		println("got a state update")
 		states := message.PayloadToStates(m.Payload)
 		for _, state := range states {
 			addBall(state.Position.X, state.Position.Y, state.Rotation)
 		}
-		draw()
+		if window != nil {
+			draw()
+			window.SwapBuffers()
+			glfw.PollEvents()
+		}
 
 	default:
 		log.Printf("DEFAULT %+v", m)
