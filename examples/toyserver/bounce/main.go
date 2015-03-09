@@ -336,7 +336,7 @@ func (s *Ship) update(xdir, ydir int) {
 
 func (s *Ship) DisplayFrames() {
 	log.Printf("------------:%d", s.frames)
-	//s.frames = 0
+	s.frames = 0
 }
 
 func (s *Ship) Display() {
