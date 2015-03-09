@@ -162,7 +162,6 @@ func shardState(s *Shard, conn net.Conn) {
 	ticksToNextBall := 10
 	for {
 		if s.CalcNextFrame() {
-			println("Calculating Frame")
 			ticksToNextBall--
 			if ticksToNextBall == 0 {
 				ticksToNextBall = rand.Intn(100) + 1

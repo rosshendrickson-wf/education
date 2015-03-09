@@ -164,7 +164,6 @@ func handleRequest(conn net.Conn, udpconn *net.UDPConn) {
 			conn.Write(pong)
 			connection.SetRevisionReady(m.Revision, true)
 		case message.StateUpdate:
-			println("Broadcast")
 			go Broadcast(udpconn, buf)
 		}
 	}

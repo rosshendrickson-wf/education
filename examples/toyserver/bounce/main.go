@@ -4,11 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"os"
+	//	"runtime"
 	"sync"
 	"time"
+
+	"github.com/go-gl/gl"
+	glfw "github.com/go-gl/glfw3"
+	"github.com/vova616/chipmunk"
+	"github.com/vova616/chipmunk/vect"
 
 	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
 )
@@ -20,8 +27,109 @@ import (
 //1000ms/sec / 60FPS = 16.666.. ms per frame
 //1000ms/sec / 56.25FPS = 17.777.. ms per frame
 
+var (
+	ballRadius = 25
+	ballMass   = 1
+
+	space       *chipmunk.Space
+	balls       []*chipmunk.Shape
+	staticLines []*chipmunk.Shape
+	deg2rad     = math.Pi / 180
+)
+
+// drawCircle draws a circle for the specified radius, rotation angle, and the specified number of sides
+func drawCircle(radius float64, sides int) {
+	gl.Begin(gl.LINE_LOOP)
+	for a := 0.0; a < 2*math.Pi; a += (2 * math.Pi / float64(sides)) {
+		gl.Vertex2d(math.Sin(a)*radius, math.Cos(a)*radius)
+	}
+	gl.Vertex3f(0, 0, 0)
+	gl.End()
+}
+
+// OpenGL draw function
+func draw() {
+	gl.Clear(gl.COLOR_BUFFER_BIT)
+	gl.Enable(gl.BLEND)
+	gl.Enable(gl.POINT_SMOOTH)
+	gl.Enable(gl.LINE_SMOOTH)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	gl.LoadIdentity()
+
+	gl.Begin(gl.LINES)
+	gl.Color3f(.2, .2, .2)
+	for i := range staticLines {
+		x := staticLines[i].GetAsSegment().A.X
+		y := staticLines[i].GetAsSegment().A.Y
+		gl.Vertex3f(float32(x), float32(y), 0)
+		x = staticLines[i].GetAsSegment().B.X
+		y = staticLines[i].GetAsSegment().B.Y
+		gl.Vertex3f(float32(x), float32(y), 0)
+	}
+	gl.End()
+
+	gl.Color4f(.3, .3, 1, .8)
+	// draw balls
+	println("LEN BALLS", len(balls))
+	for _, ball := range balls {
+		gl.PushMatrix()
+		pos := ball.Body.Position()
+		rot := ball.Body.Angle() * chipmunk.DegreeConst
+		gl.Translatef(float32(pos.X), float32(pos.Y), 0.0)
+		gl.Rotatef(float32(rot), 0, 0, 1)
+		drawCircle(float64(ballRadius), 60)
+		gl.PopMatrix()
+	}
+}
+
+// onResize sets up a simple 2d ortho context based on the window size
+func onResize(window *glfw.Window, w, h int) {
+	w, h = window.GetSize() // query window to get screen pixels
+	width, height := window.GetFramebufferSize()
+	gl.Viewport(0, 0, width, height)
+	gl.MatrixMode(gl.PROJECTION)
+	gl.LoadIdentity()
+	gl.Ortho(0, float64(w), 0, float64(h), -1, 1)
+	gl.MatrixMode(gl.MODELVIEW)
+	gl.LoadIdentity()
+	gl.ClearColor(1, 1, 1, 1)
+}
+
+// createBodies sets up the chipmunk space and static bodies
+func createBodies() {
+	space = chipmunk.NewSpace()
+	space.Gravity = vect.Vect{0, -900}
+
+	staticBody := chipmunk.NewBodyStatic()
+	staticLines = []*chipmunk.Shape{
+		chipmunk.NewSegment(vect.Vect{111.0, 280.0}, vect.Vect{407.0, 246.0}, 0),
+		chipmunk.NewSegment(vect.Vect{407.0, 246.0}, vect.Vect{407.0, 343.0}, 0),
+	}
+	for _, segment := range staticLines {
+		segment.SetElasticity(0.6)
+		staticBody.AddShape(segment)
+	}
+	space.AddBody(staticBody)
+}
+
+func addBall(x, y, rot float32) {
+
+	ball := chipmunk.NewCircle(vect.Vector_Zero, float32(ballRadius))
+	ball.SetElasticity(0.95)
+
+	body := chipmunk.NewBody(vect.Float(ballMass), ball.Moment(float32(ballMass)))
+	body.SetPosition(vect.Vect{vect.Float(x), 600.0})
+	body.SetAngle(vect.Float(rot))
+
+	body.AddShape(ball)
+	space.AddBody(body)
+	balls = append(balls, ball)
+}
+
 // read from the connection ever 5ms and apply the updates
 func runShip(address, serverPort, clientPort string) {
+	// set up physics
+	createBodies()
 
 	commands := make(chan *message.Vector, 1000)
 	ship := &Ship{name: 100, commands: commands}
@@ -34,6 +142,30 @@ func runShip(address, serverPort, clientPort string) {
 		log.Println("Unable to start ship")
 		return
 	}
+
+	// Set up graphics
+	// initialize glfw
+	if !glfw.Init() {
+		panic("Failed to initialize GLFW")
+	}
+	defer glfw.Terminate()
+
+	// create window
+	window, err := glfw.CreateWindow(600, 600, os.Args[0], nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	window.SetFramebufferSizeCallback(onResize)
+
+	window.MakeContextCurrent()
+	// set up opengl context
+	onResize(window, 600, 600)
+
+	// set up physics
+	createBodies()
+
+	//runtime.LockOSThread()
+	glfw.SwapInterval(1)
 
 	//ApplyUpdates := time.NewTicker(time.Millisecond * 5).C
 	//	SendCommands := time.NewTicker(time.Millisecond * 100).C
@@ -180,11 +312,13 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	case message.VectorUpdate:
 		println("got a correction")
 	case message.StateUpdate:
+		balls = make([]*chipmunk.Shape, 0)
 		println("got a state update")
 		states := message.PayloadToStates(m.Payload)
 		for _, state := range states {
-			println("POS:", state.Position.X, state.Position.Y)
+			addBall(state.Position.X, state.Position.Y, state.Rotation)
 		}
+		draw()
 
 	default:
 		log.Printf("DEFAULT %+v", m)
