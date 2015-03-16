@@ -313,10 +313,11 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	case message.VectorUpdate:
 		println("got a correction")
 	case message.StateUpdate:
-		//println("got broadcast")
 		balls = make([]*chipmunk.Shape, 0)
 		states := message.PayloadToStates(m.Payload)
 		for _, state := range states {
+
+			log.Println("state %+v", state)
 			if state != nil {
 				addBall(state.Position.X, state.Position.Y, state.Rotation)
 			}

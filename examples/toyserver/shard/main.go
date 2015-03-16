@@ -285,7 +285,7 @@ func shardState(s *Shard) {
 			for _, m := range messages {
 				packet := message.MessageToPacket(m)
 				s.udpconn.Write(packet)
-				println("Wrote state")
+				//println("Wrote state", len(packet))
 				fcount++
 			}
 		}

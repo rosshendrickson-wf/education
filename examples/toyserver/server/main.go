@@ -113,7 +113,7 @@ func main() {
 			}
 
 			Broadcast(udpconn, packet[0].([]byte))
-			println("Broadcasted")
+			//println("Broadcasted")
 		}
 	}(bQueue)
 
@@ -216,10 +216,10 @@ func handleUDPShard(conn *net.UDPConn) {
 				revision: revision, ready: true}
 			shards[a] = connection
 		case message.StateUpdate:
-			println("got stat update")
+			//println("got stat update")
 			bQueue.Put(buf)
 			stateRate++
-			println("put stat update")
+			//println("put stat update")
 		default:
 			log.Printf("DEFAULT %+v %d", m, len(buf))
 		}
@@ -269,11 +269,11 @@ func handleUDPClient(conn *net.UDPConn) {
 }
 
 func Broadcast(conn *net.UDPConn, packet []byte) {
-	println("BroadCast")
+	//	println("BroadCast")
 	for a, _ := range clients {
-		println("STUCK")
+		//		println("STUCK")
 		conn.WriteTo(packet, a)
-		println("HERE")
+		//		println("HERE")
 
 	}
 }
