@@ -14,11 +14,13 @@ import (
 )
 
 var count = 0
+var stateRate = 0
 var vcount = 0
 
 var revision = 0
 var connections = make(map[net.Addr]*Connection, 0)
 var clients = make(map[net.Addr]*Connection, 0)
+var shards = make(map[net.Addr]*Connection, 0)
 var bQueue *queue.Queue
 
 type Connection struct {
@@ -53,6 +55,8 @@ func main() {
 		for _ = range ticker.C {
 			log.Printf("Processed ~%d Frames", count/2)
 			count = 0
+			log.Printf("State Rate ~%d Frames", stateRate/2)
+			stateRate = 0
 		}
 	}()
 
@@ -67,12 +71,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go func(conn *net.UDPConn) {
-		for {
-			handleUDPClient(conn)
-		}
-	}(udpconn)
+	// UDP - Shard's state updates
+	saddr, err := net.ResolveUDPAddr("udp4", ":10235")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	sudpconn, err := net.ListenUDP("udp", saddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go handleUDPClient(udpconn)
 	log.Printf("Read UDP loop Start %+v", addr)
+
+	go handleUDPShard(sudpconn)
+	log.Printf("Read UDP loop Start %+v", saddr)
 
 	// TCP
 	// Listen for incoming connections.
@@ -87,7 +101,7 @@ func main() {
 	fmt.Println("Listening on " + "local 8001")
 
 	// Setup Broadcaster
-	bQueue = queue.New(1000)
+	bQueue = queue.New(10000)
 
 	go func(queue *queue.Queue) {
 
@@ -99,20 +113,19 @@ func main() {
 			}
 
 			Broadcast(udpconn, packet[0].([]byte))
+			println("Broadcasted")
 		}
 	}(bQueue)
 
 	for {
-		// Listen for an
-		// incoming
-		// connection.
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting: ", err.Error())
 			os.Exit(1)
 		}
 		go incrementRevision(conn)
-		go handleRequest(conn, udpconn)
+		go handleRequest(conn)
+
 	}
 }
 
@@ -133,7 +146,6 @@ func incrementRevision(conn net.Conn) {
 		if revision > 100000 {
 			os.Exit(1)
 		}
-		count++
 		for _, v := range connections {
 			update := &message.Message{
 				Name: v.name, Revision: revision, Type: message.FrameUpdate}
@@ -143,11 +155,10 @@ func incrementRevision(conn net.Conn) {
 	}
 }
 
-func handleRequest(conn net.Conn, udpconn *net.UDPConn) {
-	println("New Connection")
+func handleRequest(conn net.Conn) {
+	println("New TCP Connection")
 	var connection *Connection
 	for {
-
 		var buf []byte = make([]byte, 512)
 		_, err := conn.Read(buf)
 		if err != nil {
@@ -159,68 +170,101 @@ func handleRequest(conn net.Conn, udpconn *net.UDPConn) {
 		}
 
 		m := message.PacketToMessage(buf)
-		//		if m != nil && m.Revision > 0 {
-		//			println("Got something")
-		//		}
 
 		switch m.Type {
 		case message.Connect:
-			pong := message.MessageToPacket(m)
 			connection = &Connection{name: m.Name,
 				revision: revision, ready: true}
 			connections[conn.LocalAddr()] = connection
-			conn.Write(pong)
+			conn.Write(buf)
 			log.Printf("%d connectd", m.Name)
 			println("Currently Connected", len(connections))
 		case message.FrameUpdateAck:
 			//println("Server got Ack Frame", m.Name, m.Revision)
-			pong := message.MessageToPacket(m)
-			conn.Write(pong)
+			//pong := message.MessageToPacket(m)
+			conn.Write(buf)
 			connection.SetRevisionReady(m.Revision, true)
+			count++
+		}
+	}
+}
+
+func handleUDPShard(conn *net.UDPConn) {
+
+	for {
+		var connection *Connection
+		var buf []byte = make([]byte, 512)
+		//	conn.ReadFromUDP(buf[0:])
+		_, a, err := conn.ReadFromUDP(buf[0:])
+		//	log.Printf("read %s %d", a, n)
+		if err != nil {
+			return
+		}
+
+		//println("GOT SOMETHING")
+		m := message.PacketToMessage(buf)
+		if m != nil && m.Revision > 0 {
+			println("Got something")
+		}
+
+		switch m.Type {
+		case message.Connect:
+			pong := message.MessageToPacket(m)
+			conn.WriteTo(pong, a)
+			log.Printf("UDP Shard connected %+v: %+v", a, m)
+			connection = &Connection{name: m.Name,
+				revision: revision, ready: true}
+			shards[a] = connection
 		case message.StateUpdate:
 			println("got stat update")
 			bQueue.Put(buf)
+			stateRate++
+			println("put stat update")
+		default:
+			log.Printf("DEFAULT %+v %d", m, len(buf))
 		}
 	}
 }
 
 func handleUDPClient(conn *net.UDPConn) {
-	var connection *Connection
-	var buf []byte = make([]byte, 512)
-	//	conn.ReadFromUDP(buf[0:])
-	_, a, err := conn.ReadFromUDP(buf[0:])
-	//	log.Printf("read %s %d", a, n)
-	if err != nil {
-		return
-	}
 
-	m := message.PacketToMessage(buf)
-	if m != nil && m.Revision > 0 {
-		println("Got something")
-	}
+	for {
+		var connection *Connection
+		var buf []byte = make([]byte, 512)
+		//	conn.ReadFromUDP(buf[0:])
+		_, a, err := conn.ReadFromUDP(buf[0:])
+		//	log.Printf("read %s %d", a, n)
+		if err != nil {
+			return
+		}
 
-	switch m.Type {
-	case message.Connect:
-		pong := message.MessageToPacket(m)
-		conn.WriteTo(pong, a)
-		log.Printf("CONNECTED %+v: %+v", a, m)
-		connection = &Connection{name: m.Name,
-			revision: revision, ready: true}
-		clients[a] = connection
+		m := message.PacketToMessage(buf)
+		if m != nil && m.Revision > 0 {
+			println("Got something")
+		}
 
-	case message.InputUpdate:
-		log.Printf("Got input")
-	case message.VectorUpdate:
-		count++
-		if count%100 == 0 {
-			log.Printf("PONG %+v", a)
+		switch m.Type {
+		case message.Connect:
 			pong := message.MessageToPacket(m)
 			conn.WriteTo(pong, a)
+			log.Printf("Client CONNECTED %+v: %+v", a, m)
+			connection = &Connection{name: m.Name,
+				revision: revision, ready: true}
+			clients[a] = connection
+
+		case message.InputUpdate:
+			log.Printf("Got input")
+		case message.VectorUpdate:
+			if count%100 == 0 {
+				log.Printf("PONG %+v", a)
+				//pong := message.MessageToPacket(m)
+				//	conn.WriteTo(pong, a)
+			}
+			vectors := message.PayloadToVectors(m.Payload)
+			vcount += len(vectors)
+		default:
+			log.Printf("DEFAULT %+v", m)
 		}
-		vectors := message.PayloadToVectors(m.Payload)
-		vcount += len(vectors)
-	default:
-		log.Printf("DEFAULT %+v", m)
 	}
 }
 

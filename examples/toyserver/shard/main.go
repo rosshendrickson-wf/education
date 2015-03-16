@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -98,10 +99,89 @@ type Shard struct {
 	name     int
 	mu       sync.RWMutex
 
+	// Connections
+	udpconn *net.UDPConn
+
 	// states
 	newRevision  bool
 	confirmedNew bool
 	connected    bool
+}
+
+func (s *Shard) Connect(address, serverPort, clientPort string) bool {
+
+	addr, err := net.ResolveUDPAddr("udp", ":"+clientPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	saddr, err := net.ResolveUDPAddr("udp", address+":"+serverPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conn, err := net.DialUDP("udp", addr, saddr)
+	log.Printf("Listening on %+v", addr)
+	log.Printf("Sending on %+v", saddr)
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	s.udpconn = conn
+
+	count := 0
+Connect:
+	for {
+
+		// Send connection message
+		m := message.ConnectMessage(s.name, 0)
+		pong := message.MessageToPacket(m)
+		conn.Write(pong)
+
+		log.Println("Connecting . . . . ", count)
+		s.mu.Lock()
+		if s.connected {
+			s.mu.Unlock()
+			break Connect
+		}
+		s.mu.Unlock()
+		count++
+
+		s.handleUDPUpdate(conn)
+
+		if count >= 10 {
+			return false
+		}
+
+		time.Sleep(time.Second * 1)
+	}
+
+	return true
+}
+
+func (s *Shard) handleUDPUpdate(conn *net.UDPConn) {
+
+	var buf []byte = make([]byte, 512)
+	conn.ReadFromUDP(buf[0:])
+	m := message.PacketToMessage(buf)
+
+	if m == nil {
+		println("a")
+		return
+	}
+	switch m.Type {
+	case message.Connect:
+		s.Connected(true)
+	default:
+		println("DEFAULT")
+	}
+}
+
+func (s *Shard) Connected(value bool) {
+	s.mu.Lock()
+	s.connected = value
+	s.mu.Unlock()
 }
 
 func (s *Shard) CalcNextFrame() bool {
@@ -111,9 +191,12 @@ func (s *Shard) CalcNextFrame() bool {
 	return r
 }
 
-func (s *Shard) SetConfirmedNew(value bool) {
+func (s *Shard) SetConfirmedNew(value bool, revision int) {
 	s.mu.Lock()
 	s.confirmedNew = value
+	if value {
+		s.revision = revision
+	}
 	s.mu.Unlock()
 }
 
@@ -124,7 +207,7 @@ func main() {
 	ticker := time.NewTicker(time.Second * 1)
 	go func() {
 		for _ = range ticker.C {
-			log.Printf("Recived ~%d Frames Updates", count/tickerSecond)
+			log.Printf("Received ~%d Frames Updates", count/tickerSecond)
 			count = 0
 
 			log.Printf("Calc ~%d Frames", fcount/tickerSecond)
@@ -153,6 +236,18 @@ func main() {
 
 	// Connection
 	s := &Shard{name: 101}
+
+	// UDP STATE
+	address := ""
+	clientPort := "36504"
+	serverPort := "10235"
+
+	connected := s.Connect(address, serverPort, clientPort)
+
+	if !connected {
+		panic(errors.New("Unable to establish UDP State updates"))
+	}
+
 	m := message.ConnectMessage(s.name, 1)
 	packet := message.MessageToPacket(m)
 	tcpconn.Write(packet)
@@ -168,14 +263,14 @@ func main() {
 
 	runtime.LockOSThread()
 
-	go shardState(s, tcpconn)
+	go shardState(s)
 	for {
 		handleTCP(tcpconn, s)
 	}
 
 }
 
-func shardState(s *Shard, conn net.Conn) {
+func shardState(s *Shard) {
 	ticksToNextBall := 10
 	for {
 		if s.CalcNextFrame() {
@@ -185,11 +280,12 @@ func shardState(s *Shard, conn net.Conn) {
 				addBall()
 			}
 			states := step(1.0 / 60.0)
-			s.SetConfirmedNew(false)
+			s.SetConfirmedNew(false, 0)
 			messages := message.StatesToMessages(states)
 			for _, m := range messages {
 				packet := message.MessageToPacket(m)
-				conn.Write(packet)
+				s.udpconn.Write(packet)
+				println("Wrote state")
 				fcount++
 			}
 		}
@@ -223,7 +319,7 @@ func handleTCP(conn net.Conn, s *Shard) {
 		//log.Printf("Proposed update %d to revision %d", s.revision, s.proposed)
 	case message.FrameUpdateAck:
 		if s.proposed == m.Revision {
-			s.confirmedNew = true
+			s.SetConfirmedNew(true, s.proposed)
 			s.revision = s.proposed
 			count++
 			//	log.Println("Confirmed update to revision", s.revision)
