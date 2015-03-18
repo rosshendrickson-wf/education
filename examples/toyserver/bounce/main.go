@@ -301,7 +301,6 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	var buf []byte = make([]byte, 512)
 	conn.ReadFromUDP(buf[0:])
 	m := message.PacketToMessage(buf)
-	s.frames++
 
 	if m == nil {
 		println("a")
@@ -313,11 +312,12 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	case message.VectorUpdate:
 		println("got a correction")
 	case message.StateUpdate:
+		s.frames++
 		balls = make([]*chipmunk.Shape, 0)
 		states := message.PayloadToStates(m.Payload)
-		for _, state := range states {
-
-			log.Println("state %+v", state)
+		//println("Update Message ", len(states))
+		//println("payload", len(m.Payload))
+		for _, state := range states.States {
 			if state != nil {
 				addBall(state.Position.X, state.Position.Y, state.Rotation)
 			}

@@ -79,6 +79,26 @@ func randVectors(num int) []*Vector {
 	return results
 }
 
+func randVecs(num int) []*Vec {
+
+	results := make([]*Vec, 0)
+	for i := 0; i < num; i++ {
+		xdir := randomFloat(1.0)
+		ydir := randomFloat(1.0)
+
+		v := &Vec{xdir, ydir}
+
+		results = append(results, v)
+	}
+	return results
+}
+
+func randomFloat(min float32) float32 {
+	rand.Seed(time.Now().Unix())
+	return rand.Float32() * min
+
+}
+
 func random(min, max int) int {
 	rand.Seed(time.Now().Unix())
 	return rand.Intn(max-min) + min

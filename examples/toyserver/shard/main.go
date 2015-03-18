@@ -76,7 +76,7 @@ func step(dt float32) []*message.State {
 		ball := balls[i]
 		rot := ball.Body.Angle() * chipmunk.DegreeConst
 		p := ball.Body.Position()
-		vec := message.Vec{X: float32(p.X), Y: float32(p.Y)}
+		vec := &message.Vec{X: float32(p.X), Y: float32(p.Y)}
 		s := &message.State{Kind: 0, Position: vec, Rotation: float32(rot)}
 		if p.Y < -100 {
 			space.RemoveBody(balls[i].Body)

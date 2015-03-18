@@ -1,7 +1,9 @@
 package message
 
 import (
+	//	"bytes"
 	"encoding/json"
+	//	"os"
 )
 
 const (
@@ -14,25 +16,23 @@ const (
 type State struct {
 	Kind     int
 	UUID     int
-	Position Vec
+	Position *Vec
 	Rotation float32
+}
+
+type StatePayload struct {
+	States []*State
 }
 
 func StatesToMessages(states []*State) []*Message {
 
-	//	result := make([]*Message, 0)
-	//	payload := StatesPayload(states)
-	//	m := &Message{Type: StateUpdate, Payload: payload}
-	//	result = append(result, m)
-	//	return result
-	//
 	if len(states) <= maxState {
 
 		//	log.Printf("Vec: %+v", vectors)
 		//	log.Printf("Vec: %+v", vectors[0])
 
 		results := make([]*Message, 1)
-		vec := StatesPayload(states)
+		vec := StatePayload{states}
 		payload, _ := json.Marshal(vec)
 		results[0] = &Message{Type: StateUpdate, Payload: payload}
 		//	println("HERE")
@@ -50,7 +50,7 @@ func StatesToMessages(states []*State) []*Message {
 			chunk = append(chunk, states[j])
 			j++
 		}
-		vec := StatesPayload(chunk)
+		vec := StatePayload{chunk}
 		payload, _ := json.Marshal(vec)
 		m.Payload = payload
 		m.Type = StateUpdate
@@ -60,15 +60,18 @@ func StatesToMessages(states []*State) []*Message {
 
 }
 
-func StatesPayload(states []*State) []byte {
-	payload, _ := json.Marshal(states)
-	return payload
-}
+func PayloadToStates(payload []byte) StatePayload {
 
-func PayloadToStates(payload []byte) []*State {
+	var sPayload StatePayload
+	err := json.Unmarshal(payload, &sPayload)
 
-	var sPayload []*State
-	json.Unmarshal(payload, &sPayload)
+	if err != nil {
+		panic(err)
+	}
+
+	//var out bytes.Buffer
+	//	json.Indent(&out, payload, "=", "\t")
+	//	out.WriteTo(os.Stdout)
 
 	return sPayload
 }
