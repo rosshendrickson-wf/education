@@ -286,7 +286,6 @@ func shardState(s *Shard) {
 				m.Revision = s.revision
 				packet := message.MessageToPacket(m)
 				s.udpconn.Write(packet)
-				//println("Wrote state", len(packet))
 				fcount++
 			}
 		}

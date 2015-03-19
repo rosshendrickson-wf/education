@@ -133,9 +133,11 @@ func runShip(address, serverPort, clientPort string) {
 	createBodies()
 
 	commands := make(chan *message.Vector, 1000)
+	render := make(chan bool, 1)
 	um := make(map[int]*queue.Queue)
 
-	ship := &Ship{name: 100, commands: commands, updateMap: &UpdateMap{updates: um}}
+	ship := &Ship{name: 100, commands: commands, updateMap: &UpdateMap{updates: um},
+		renderChan: render}
 
 	connected := ship.Connect(address, serverPort, clientPort)
 
@@ -151,7 +153,7 @@ func runShip(address, serverPort, clientPort string) {
 	//Display := time.NewTicker(time.Millisecond * 120).C
 	DisplayFrames := time.NewTicker(time.Second * 1).C
 	Random := time.NewTicker(time.Millisecond * 1).C
-	DieTime := time.NewTicker(time.Second * 30).C
+	DieTime := time.NewTicker(time.Second * 60).C
 	Render := time.NewTicker(time.Millisecond * 1).C
 
 OuterLoop:
@@ -164,7 +166,7 @@ OuterLoop:
 		//	case <-Display:
 		//		ship.Display()
 		case <-Render:
-			ship.RenderFrame()
+			ship.renderChan <- true
 		case <-DisplayFrames:
 			ship.DisplayFrames()
 		case <-Random:
@@ -186,7 +188,6 @@ type UpdateMap struct {
 
 func (u *UpdateMap) InsertUpdate(revision int, updates []*message.State) {
 
-	println("Insert")
 	u.mu.RLock()
 	if q, ok := u.updates[revision]; ok {
 		if q != nil {
@@ -207,7 +208,6 @@ func (u *UpdateMap) InsertUpdate(revision int, updates []*message.State) {
 		u.updates[revision] = q
 		u.mu.Unlock()
 	}
-	println("Update")
 }
 
 func (u *UpdateMap) GetHighestUpdates() *queue.Queue {
@@ -236,6 +236,7 @@ type Ship struct {
 	sconn      *net.UDPConn
 	commands   chan *message.Vector
 	updates    chan []byte
+	renderChan chan bool
 	shipTime   int
 	serverTime int
 	frames     int
@@ -331,6 +332,20 @@ Connect:
 		glfw.SwapInterval(1)
 
 		for {
+			//			s.handleUpdate(conn)
+			select {
+			case <-s.renderChan:
+				s.RenderFrame()
+			default:
+				if s.Stop() {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
 			s.handleUpdate(conn)
 			if s.Stop() {
 				return
@@ -370,10 +385,10 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 		println("got a correction")
 	case message.StateUpdate:
 		go func(m *message.Message, s *Ship) {
-			println("Processing")
+			//		println("Processing")
 			states := message.PayloadToStates(m.Payload)
 			s.updateMap.InsertUpdate(m.Revision, states.States)
-			println("Proccessed update", m.Revision)
+			//		println("Proccessed update", m.Revision)
 		}(m, s)
 	default:
 		log.Printf("DEFAULT %+v", m)
@@ -384,7 +399,6 @@ func (s *Ship) RenderFrame() {
 
 	s.render.Lock()
 	defer s.render.Unlock()
-	println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
 	s.frames++
 
 	// Rebuild state from Queue
@@ -419,7 +433,9 @@ func (s *Ship) update(xdir, ydir int) {
 }
 
 func (s *Ship) DisplayFrames() {
+	log.Println("+++++++++++++++++++++++++++")
 	log.Printf("------------:%d", s.frames)
+	log.Printf("============:%d", len(balls))
 	s.frames = 0
 }
 
