@@ -204,7 +204,7 @@ func handleUDPShard(conn *net.UDPConn) {
 		//println("GOT SOMETHING")
 		m := message.PacketToMessage(buf)
 		if m != nil && m.Revision > 0 {
-			println("Got something")
+			//println("Got something")
 		}
 
 		switch m.Type {

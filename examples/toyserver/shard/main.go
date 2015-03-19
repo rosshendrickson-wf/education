@@ -283,6 +283,7 @@ func shardState(s *Shard) {
 			s.SetConfirmedNew(false, 0)
 			messages := message.StatesToMessages(states)
 			for _, m := range messages {
+				m.Revision = s.revision
 				packet := message.MessageToPacket(m)
 				s.udpconn.Write(packet)
 				//println("Wrote state", len(packet))

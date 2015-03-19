@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/go-gl/gl"
 	glfw "github.com/go-gl/glfw3"
 	"github.com/vova616/chipmunk"
@@ -132,7 +133,9 @@ func runShip(address, serverPort, clientPort string) {
 	createBodies()
 
 	commands := make(chan *message.Vector, 1000)
-	ship := &Ship{name: 100, commands: commands}
+	um := make(map[int]*queue.Queue)
+
+	ship := &Ship{name: 100, commands: commands, updateMap: &UpdateMap{updates: um}}
 
 	connected := ship.Connect(address, serverPort, clientPort)
 
@@ -149,6 +152,7 @@ func runShip(address, serverPort, clientPort string) {
 	DisplayFrames := time.NewTicker(time.Second * 1).C
 	Random := time.NewTicker(time.Millisecond * 1).C
 	DieTime := time.NewTicker(time.Second * 30).C
+	Render := time.NewTicker(time.Millisecond * 1).C
 
 OuterLoop:
 	for {
@@ -159,6 +163,8 @@ OuterLoop:
 		//			ship.SendCommands()
 		//	case <-Display:
 		//		ship.Display()
+		case <-Render:
+			ship.RenderFrame()
 		case <-DisplayFrames:
 			ship.DisplayFrames()
 		case <-Random:
@@ -170,6 +176,55 @@ OuterLoop:
 		default:
 		}
 	}
+}
+
+type UpdateMap struct {
+	updates map[int]*queue.Queue
+	highest int
+	mu      sync.RWMutex
+}
+
+func (u *UpdateMap) InsertUpdate(revision int, updates []*message.State) {
+
+	println("Insert")
+	u.mu.RLock()
+	if q, ok := u.updates[revision]; ok {
+		if q != nil {
+			err := q.Put(updates)
+			if err != nil {
+				return
+			}
+		}
+		u.mu.RUnlock()
+	} else {
+		u.mu.RUnlock()
+		u.mu.Lock()
+		if revision > u.highest {
+			u.highest = revision
+		}
+		q := queue.New(10000)
+		q.Put(updates)
+		u.updates[revision] = q
+		u.mu.Unlock()
+	}
+	println("Update")
+}
+
+func (u *UpdateMap) GetHighestUpdates() *queue.Queue {
+
+	u.mu.RLock()
+	q := u.updates[u.highest]
+	u.updates[u.highest] = nil
+	u.mu.RUnlock()
+
+	return q
+}
+
+func (u *UpdateMap) GetUpdates(revision int) *queue.Queue {
+	u.mu.RLock()
+	q := u.updates[revision]
+	u.mu.RUnlock()
+	return q
 }
 
 type Ship struct {
@@ -185,6 +240,8 @@ type Ship struct {
 	serverTime int
 	frames     int
 	lock       sync.Mutex
+	render     sync.Mutex
+	updateMap  *UpdateMap
 	stop       bool
 	revision   int
 	serverAddr net.Addr
@@ -312,24 +369,47 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	case message.VectorUpdate:
 		println("got a correction")
 	case message.StateUpdate:
-		s.frames++
-		balls = make([]*chipmunk.Shape, 0)
-		states := message.PayloadToStates(m.Payload)
-		//println("Update Message ", len(states))
-		//println("payload", len(m.Payload))
-		for _, state := range states.States {
-			if state != nil {
-				addBall(state.Position.X, state.Position.Y, state.Rotation)
-			}
-		}
-		if window != nil {
-			draw()
-			window.SwapBuffers()
-			glfw.PollEvents()
-		}
-
+		go func(m *message.Message, s *Ship) {
+			println("Processing")
+			states := message.PayloadToStates(m.Payload)
+			s.updateMap.InsertUpdate(m.Revision, states.States)
+			println("Proccessed update", m.Revision)
+		}(m, s)
 	default:
 		log.Printf("DEFAULT %+v", m)
+	}
+}
+
+func (s *Ship) RenderFrame() {
+
+	s.render.Lock()
+	defer s.render.Unlock()
+	println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+	s.frames++
+
+	// Rebuild state from Queue
+	balls = make([]*chipmunk.Shape, 0)
+	q := s.updateMap.GetHighestUpdates()
+	var applystate = func(value interface{}) {
+		if states, ok := value.([]*message.State); ok {
+			// Rebuild state based on queue
+			for _, state := range states {
+				if state != nil {
+					addBall(state.Position.X, state.Position.Y, state.Rotation)
+				}
+			}
+		} else {
+			println("BORKED THE CAST")
+		}
+	}
+
+	queue.ExecuteInParallel(q, applystate)
+
+	// Actually Render State
+	if window != nil {
+		draw()
+		window.SwapBuffers()
+		glfw.PollEvents()
 	}
 }
 
