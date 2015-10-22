@@ -4,11 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"os"
+	"runtime"
 	"sync"
 	"time"
+
+	"github.com/Workiva/go-datastructures/queue"
+	"github.com/go-gl/gl"
+	glfw "github.com/go-gl/glfw3"
+	"github.com/vova616/chipmunk"
+	"github.com/vova616/chipmunk/vect"
 
 	"github.com/rosshendrickson-wf/education/examples/toyserver/message"
 )
@@ -20,11 +28,116 @@ import (
 //1000ms/sec / 60FPS = 16.666.. ms per frame
 //1000ms/sec / 56.25FPS = 17.777.. ms per frame
 
+var (
+	ballRadius = 25
+	ballMass   = 1
+
+	space       *chipmunk.Space
+	balls       []*chipmunk.Shape
+	staticLines []*chipmunk.Shape
+	deg2rad     = math.Pi / 180
+	window      *glfw.Window
+)
+
+// drawCircle draws a circle for the specified radius, rotation angle, and the specified number of sides
+func drawCircle(radius float64, sides int) {
+	gl.Begin(gl.LINE_LOOP)
+	for a := 0.0; a < 2*math.Pi; a += (2 * math.Pi / float64(sides)) {
+		gl.Vertex2d(math.Sin(a)*radius, math.Cos(a)*radius)
+	}
+	gl.Vertex3f(0, 0, 0)
+	gl.End()
+}
+
+// OpenGL draw function
+func draw() {
+	gl.Clear(gl.COLOR_BUFFER_BIT)
+	gl.Enable(gl.BLEND)
+	gl.Enable(gl.POINT_SMOOTH)
+	gl.Enable(gl.LINE_SMOOTH)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	gl.LoadIdentity()
+
+	gl.Begin(gl.LINES)
+	gl.Color3f(.2, .2, .2)
+	for i := range staticLines {
+		x := staticLines[i].GetAsSegment().A.X
+		y := staticLines[i].GetAsSegment().A.Y
+		gl.Vertex3f(float32(x), float32(y), 0)
+		x = staticLines[i].GetAsSegment().B.X
+		y = staticLines[i].GetAsSegment().B.Y
+		gl.Vertex3f(float32(x), float32(y), 0)
+	}
+	gl.End()
+
+	gl.Color4f(.3, .3, 1, .8)
+	// draw balls
+	for _, ball := range balls {
+		gl.PushMatrix()
+		pos := ball.Body.Position()
+		rot := ball.Body.Angle() * chipmunk.DegreeConst
+		gl.Translatef(float32(pos.X), float32(pos.Y), 0.0)
+		gl.Rotatef(float32(rot), 0, 0, 1)
+		drawCircle(float64(ballRadius), 60)
+		gl.PopMatrix()
+	}
+}
+
+// onResize sets up a simple 2d ortho context based on the window size
+func onResize(window *glfw.Window, w, h int) {
+	w, h = window.GetSize() // query window to get screen pixels
+	width, height := window.GetFramebufferSize()
+	gl.Viewport(0, 0, width, height)
+	gl.MatrixMode(gl.PROJECTION)
+	gl.LoadIdentity()
+	gl.Ortho(0, float64(w), 0, float64(h), -1, 1)
+	gl.MatrixMode(gl.MODELVIEW)
+	gl.LoadIdentity()
+	gl.ClearColor(1, 1, 1, 1)
+}
+
+// createBodies sets up the chipmunk space and static bodies
+func createBodies() {
+	space = chipmunk.NewSpace()
+	space.Gravity = vect.Vect{0, -900}
+
+	staticBody := chipmunk.NewBodyStatic()
+	staticLines = []*chipmunk.Shape{
+		chipmunk.NewSegment(vect.Vect{111.0, 280.0}, vect.Vect{407.0, 246.0}, 0),
+		chipmunk.NewSegment(vect.Vect{407.0, 246.0}, vect.Vect{407.0, 343.0}, 0),
+	}
+	for _, segment := range staticLines {
+		segment.SetElasticity(0.6)
+		staticBody.AddShape(segment)
+	}
+	space.AddBody(staticBody)
+}
+
+func addBall(x, y, rot float32) {
+
+	ball := chipmunk.NewCircle(vect.Vector_Zero, float32(ballRadius))
+	ball.SetElasticity(0.95)
+
+	body := chipmunk.NewBody(vect.Float(ballMass), ball.Moment(float32(ballMass)))
+	body.SetPosition(vect.Vect{vect.Float(x), vect.Float(y)})
+	body.SetAngle(vect.Float(rot))
+
+	body.AddShape(ball)
+	space.AddBody(body)
+	balls = append(balls, ball)
+}
+
 // read from the connection ever 5ms and apply the updates
 func runShip(address, serverPort, clientPort string) {
+	// set up physics
+	createBodies()
 
 	commands := make(chan *message.Vector, 1000)
-	ship := &Ship{name: 100, commands: commands}
+	render := make(chan bool, 1)
+	um := make(map[int]*queue.Queue)
+
+	ship := &Ship{name: 100, commands: commands, updateMap: &UpdateMap{updates: um},
+		renderChan: render}
 
 	connected := ship.Connect(address, serverPort, clientPort)
 
@@ -36,21 +149,24 @@ func runShip(address, serverPort, clientPort string) {
 	}
 
 	//ApplyUpdates := time.NewTicker(time.Millisecond * 5).C
-	SendCommands := time.NewTicker(time.Millisecond * 100).C
+	//	SendCommands := time.NewTicker(time.Millisecond * 100).C
 	//Display := time.NewTicker(time.Millisecond * 120).C
 	DisplayFrames := time.NewTicker(time.Second * 1).C
 	Random := time.NewTicker(time.Millisecond * 1).C
-	DieTime := time.NewTicker(time.Second * 10).C
+	DieTime := time.NewTicker(time.Second * 60).C
+	Render := time.NewTicker(time.Millisecond * 1).C
 
 OuterLoop:
 	for {
 		select {
 		//	case <-ApplyUpdates:
 		//		ship.ApplyUpdates()
-		case <-SendCommands:
-			ship.SendCommands()
+		//		case <-SendCommands:
+		//			ship.SendCommands()
 		//	case <-Display:
 		//		ship.Display()
+		case <-Render:
+			ship.renderChan <- true
 		case <-DisplayFrames:
 			ship.DisplayFrames()
 		case <-Random:
@@ -64,6 +180,53 @@ OuterLoop:
 	}
 }
 
+type UpdateMap struct {
+	updates map[int]*queue.Queue
+	highest int
+	mu      sync.RWMutex
+}
+
+func (u *UpdateMap) InsertUpdate(revision int, updates []*message.State) {
+
+	u.mu.RLock()
+	if q, ok := u.updates[revision]; ok {
+		if q != nil {
+			err := q.Put(updates)
+			if err != nil {
+				return
+			}
+		}
+		u.mu.RUnlock()
+	} else {
+		u.mu.RUnlock()
+		u.mu.Lock()
+		if revision > u.highest {
+			u.highest = revision
+		}
+		q := queue.New(10000)
+		q.Put(updates)
+		u.updates[revision] = q
+		u.mu.Unlock()
+	}
+}
+
+func (u *UpdateMap) GetHighestUpdates() *queue.Queue {
+
+	u.mu.RLock()
+	q := u.updates[u.highest]
+	u.updates[u.highest] = nil
+	u.mu.RUnlock()
+
+	return q
+}
+
+func (u *UpdateMap) GetUpdates(revision int) *queue.Queue {
+	u.mu.RLock()
+	q := u.updates[revision]
+	u.mu.RUnlock()
+	return q
+}
+
 type Ship struct {
 	xp         int
 	yp         int
@@ -73,10 +236,13 @@ type Ship struct {
 	sconn      *net.UDPConn
 	commands   chan *message.Vector
 	updates    chan []byte
+	renderChan chan bool
 	shipTime   int
 	serverTime int
 	frames     int
 	lock       sync.Mutex
+	render     sync.Mutex
+	updateMap  *UpdateMap
 	stop       bool
 	revision   int
 	serverAddr net.Addr
@@ -140,6 +306,45 @@ Connect:
 
 	go func() {
 		defer conn.Close()
+
+		// Set up graphics
+		// initialize glfw
+		if !glfw.Init() {
+			panic("Failed to initialize GLFW")
+		}
+		defer glfw.Terminate()
+
+		// create window
+		window, _ = glfw.CreateWindow(600, 600, os.Args[0], nil, nil)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		window.SetFramebufferSizeCallback(onResize)
+
+		window.MakeContextCurrent()
+		// set up opengl context
+		onResize(window, 600, 600)
+
+		// set up physics
+		createBodies()
+
+		runtime.LockOSThread()
+		glfw.SwapInterval(1)
+
+		for {
+			//			s.handleUpdate(conn)
+			select {
+			case <-s.renderChan:
+				s.RenderFrame()
+			default:
+				if s.Stop() {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
 		for {
 			s.handleUpdate(conn)
 			if s.Stop() {
@@ -168,7 +373,6 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 	var buf []byte = make([]byte, 512)
 	conn.ReadFromUDP(buf[0:])
 	m := message.PacketToMessage(buf)
-	s.frames++
 
 	if m == nil {
 		println("a")
@@ -179,8 +383,47 @@ func (s *Ship) handleUpdate(conn *net.UDPConn) {
 		s.Connected(true)
 	case message.VectorUpdate:
 		println("got a correction")
+	case message.StateUpdate:
+		go func(m *message.Message, s *Ship) {
+			//		println("Processing")
+			states := message.PayloadToStates(m.Payload)
+			s.updateMap.InsertUpdate(m.Revision, states.States)
+			//		println("Proccessed update", m.Revision)
+		}(m, s)
 	default:
 		log.Printf("DEFAULT %+v", m)
+	}
+}
+
+func (s *Ship) RenderFrame() {
+
+	s.render.Lock()
+	defer s.render.Unlock()
+	s.frames++
+
+	// Rebuild state from Queue
+	balls = make([]*chipmunk.Shape, 0)
+	q := s.updateMap.GetHighestUpdates()
+	var applystate = func(value interface{}) {
+		if states, ok := value.([]*message.State); ok {
+			// Rebuild state based on queue
+			for _, state := range states {
+				if state != nil {
+					addBall(state.Position.X, state.Position.Y, state.Rotation)
+				}
+			}
+		} else {
+			println("BORKED THE CAST")
+		}
+	}
+
+	queue.ExecuteInParallel(q, applystate)
+
+	// Actually Render State
+	if window != nil {
+		draw()
+		window.SwapBuffers()
+		glfw.PollEvents()
 	}
 }
 
@@ -190,8 +433,10 @@ func (s *Ship) update(xdir, ydir int) {
 }
 
 func (s *Ship) DisplayFrames() {
+	log.Println("+++++++++++++++++++++++++++")
 	log.Printf("------------:%d", s.frames)
-	//s.frames = 0
+	log.Printf("============:%d", len(balls))
+	s.frames = 0
 }
 
 func (s *Ship) Display() {

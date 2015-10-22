@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"log"
 	"net"
 	"runtime"
@@ -45,29 +44,45 @@ func main() {
 	defer conn.Close()
 
 	log.Printf("Read loop Start %+v", addr)
-	connbuf := bufio.NewReader(conn)
 	for {
-		handleClient(conn, connbuf)
+		handleClient(conn)
 	}
 
 }
 
-func handleClient(conn *net.UDPConn, reader *bufio.Reader) {
+func handleClient(conn *net.UDPConn) {
 
 	var buf []byte = make([]byte, 512)
-	conn.ReadFromUDP(buf[0:])
-
-	//n, a, err := conn.ReadFromUDP(buf[0:])
-	//log.Printf("read %s %d", a, n)
-	//	if err != nil {
-	//		return
-	//	}
+	//	conn.ReadFromUDP(buf[0:])
+	_, a, err := conn.ReadFromUDP(buf[0:])
+	//	log.Printf("read %s %d", a, n)
+	if err != nil {
+		return
+	}
 
 	m := message.PacketToMessage(buf)
-	if m.Value != "" {
-		count++
-		vcount += len(m.Vectors)
+	if m != nil && m.Revision > 0 {
+		println("Got something")
 	}
-	//log.Printf("deserialized: %s", m.Value)
-	//	conn.WriteToUDP([]byte("hello"), a)
+
+	switch m.Type {
+	case message.Connect:
+		pong := message.MessageToPacket(m)
+		conn.WriteTo(pong, a)
+		log.Printf("CONNECTED %+v: %+v", a, m)
+
+	case message.InputUpdate:
+		log.Printf("Got input")
+	case message.VectorUpdate:
+		count++
+		if count%100 == 0 {
+			log.Printf("PONG %+v", a)
+			pong := message.MessageToPacket(m)
+			conn.WriteTo(pong, a)
+		}
+		vectors := message.PayloadToVectors(m.Payload)
+		vcount += len(vectors)
+	default:
+		log.Printf("DEFAULT %+v", m)
+	}
 }
